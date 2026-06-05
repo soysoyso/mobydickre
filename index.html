@@ -933,37 +933,50 @@ async function geocode(addr, buildingName) {
 
 async function captureMap(lat, lon) {
   return new Promise(resolve => {
-    const c = document.getElementById('hmap');
-    c.innerHTML = '<div id="_cm" style="width:700px;height:450px"></div>';
-    const el = document.getElementById('_cm');
-    let done=false;
-    const map = L.map(el,{zoomControl:false,attributionControl:false});
-    const layer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{crossOrigin:'anonymous'});
+    const W=700, H=450;
+    const zoom = parseInt(document.getElementById('cfgZoom')?.value||16);
+
+    // body에 직접 붙이는 임시 div (화면 밖 x, 하지만 DOM에 존재)
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = `position:absolute;left:0;top:0;width:${W}px;height:${H}px;z-index:99999;visibility:hidden`;
+    document.body.appendChild(wrapper);
+
+    let done = false;
+    const map = L.map(wrapper, {zoomControl:false, attributionControl:false});
+    const layer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {crossOrigin:'anonymous'});
     let tTotal=0, tLoaded=0;
-    layer.on('tileloadstart',()=>tTotal++);
-    layer.on('tileload',()=>{ tLoaded++; if(tLoaded>=tTotal&&tTotal>0) doCapture(); });
+    layer.on('tileloadstart', ()=>tTotal++);
+    layer.on('tileload', ()=>{ tLoaded++; if(tLoaded>=tTotal&&tTotal>0) doCapture(); });
     layer.addTo(map);
-    map.setView([lat,lon], parseInt(document.getElementById('cfgZoom')?.value||16));
+    map.setView([lat, lon], zoom);
     L.circleMarker([lat,lon],{radius:12,fillColor:'#e74c3c',color:'#fff',weight:3,fillOpacity:1}).addTo(map);
-    function doCapture(){ if(done)return; done=true;
-      setTimeout(async()=>{
-        try{
-          // 캡처 직전 잠깐 visible → html2canvas 좌표 정확도 확보
-          c.style.opacity='1'; c.style.zIndex='9999';
-          map.invalidateSize(); // Leaflet 크기 재계산
-          await new Promise(r=>setTimeout(r,300));
-          const canvas=await html2canvas(el,{
-            useCORS:true, allowTaint:false,
-            width:700, height:450, logging:false,
-            x:0, y:0, scrollX:0, scrollY:0
-          });
-          c.style.opacity='0'; c.style.zIndex='-9999';
-          const b64=canvas.toDataURL('image/jpeg',.92);
-          map.remove(); c.innerHTML=''; resolve(b64);
-        }catch(e){ map.remove(); c.innerHTML=''; c.style.opacity='0'; resolve(null); }
-      },700);
+
+    async function doCapture() {
+      if(done) return; done=true;
+      await new Promise(r=>setTimeout(r,500));
+      try {
+        // 잠깐 visible로 변경 후 캡처
+        wrapper.style.visibility = 'visible';
+        map.invalidateSize();
+        await new Promise(r=>setTimeout(r,200));
+        const canvas = await html2canvas(wrapper, {
+          useCORS:true, allowTaint:false, logging:false,
+          width:W, height:H,
+          windowWidth:W, windowHeight:H,
+          scrollX:0, scrollY:0
+        });
+        wrapper.style.visibility = 'hidden';
+        const b64 = canvas.toDataURL('image/jpeg', .92);
+        map.remove();
+        document.body.removeChild(wrapper);
+        resolve(b64);
+      } catch(e) {
+        map.remove();
+        document.body.removeChild(wrapper);
+        resolve(null);
+      }
     }
-    setTimeout(()=>{ if(!done) doCapture(); },5000);
+    setTimeout(()=>{ if(!done) doCapture(); }, 5000);
   });
 }
 
