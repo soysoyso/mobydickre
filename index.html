@@ -99,7 +99,7 @@ body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f0
 @keyframes spin{to{transform:rotate(360deg)}}
 .ot{color:#fff;font-size:16px;font-weight:700}
 .os{color:rgba(255,255,255,.5);font-size:12px}
-#hmap{position:fixed;left:-9999px;top:-9999px;width:700px;height:450px;z-index:-1}
+#hmap{position:fixed;left:0;top:0;width:700px;height:450px;z-index:-9999;opacity:0;pointer-events:none}
 </style>
 </head>
 <body>
@@ -948,10 +948,19 @@ async function captureMap(lat, lon) {
     function doCapture(){ if(done)return; done=true;
       setTimeout(async()=>{
         try{
-          const canvas=await html2canvas(el,{useCORS:true,allowTaint:false,width:700,height:450,logging:false});
+          // 캡처 직전 잠깐 visible → html2canvas 좌표 정확도 확보
+          c.style.opacity='1'; c.style.zIndex='9999';
+          map.invalidateSize(); // Leaflet 크기 재계산
+          await new Promise(r=>setTimeout(r,300));
+          const canvas=await html2canvas(el,{
+            useCORS:true, allowTaint:false,
+            width:700, height:450, logging:false,
+            x:0, y:0, scrollX:0, scrollY:0
+          });
+          c.style.opacity='0'; c.style.zIndex='-9999';
           const b64=canvas.toDataURL('image/jpeg',.92);
           map.remove(); c.innerHTML=''; resolve(b64);
-        }catch(e){ map.remove(); c.innerHTML=''; resolve(null); }
+        }catch(e){ map.remove(); c.innerHTML=''; c.style.opacity='0'; resolve(null); }
       },700);
     }
     setTimeout(()=>{ if(!done) doCapture(); },5000);
