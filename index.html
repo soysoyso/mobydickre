@@ -1090,4 +1090,452 @@ async function addBldSlide(pptx, b, num, total) {
     [cell('기준층'), cell(b.netArea,false)],
     [cell('전용율'), cell(b.ratio,false)],
     [cell('승강기'), cell(b.elevator,false)],
-    [cell('주차'),   cell(b.parkin
+    [cell('주차'),   cell(b.parking,false)],
+  ],{x:3.052,y:1.368,w:3.304,h:2.55,rowH:.283,border:{pt:.5,color:'BFBFBF'},colW:[.85,2.454]});
+
+  // ── 건물 위치 (지도)
+  slide.addShape('rect',{x:6.841,y:1.163,w:.107,h:.204,fill:{color:'BFBFBF'}});
+  slide.addText('건물 위치',{x:6.902,y:1.122,w:1.5,h:.286,fontSize:11,bold:true,color:'002060',fontFace:f});
+  slide.addShape('rect',{x:6.851,y:1.507,w:2.757,h:2.241,fill:{color:'E8EEF8'}});
+  let mapData = null;
+  if(withMap) {
+    // 미리보기에서 캡처된 이미지 우선 사용 (빠름 + 사용자가 확인한 위치)
+    if(b.mapCapture) {
+      mapData = b.mapCapture;
+    } else if(b.lat || b.address) {
+      showOv(true,`지도 캡처 (${num}/${total})`,b.name);
+      let geo = b.lat && b.lon ? {lat:b.lat, lon:b.lon} : await geocode(b.address, b.name);
+      if(geo) mapData = await captureMap(geo.lat, geo.lon);
+    }
+  }
+  if(mapData){
+    try{ slide.addImage({data:mapData,x:6.851,y:1.507,w:2.757,h:2.241,sizing:{type:'cover',w:2.757,h:2.241}}); }catch(e){}
+  } else {
+    slide.addText(withMap?'🗺️ 지도 없음':'🗺️ 지도 생략됨\n(설정에서 활성화 가능)',{x:6.851,y:1.507,w:2.757,h:2.241,fontSize:10,color:'AABBCC',align:'center',valign:'middle'});
+  }
+
+  // ── 기준층 도면
+  slide.addShape('rect',{x:6.828,y:4.035,w:.107,h:.204,fill:{color:'BFBFBF'}});
+  slide.addText('기준층 도면',{x:6.889,y:3.983,w:1.5,h:.286,fontSize:11,bold:true,color:'002060',fontFace:f});
+  slide.addShape('rect',{x:6.851,y:4.357,w:2.757,h:2.28,fill:{color:'FAFAFA'},line:{color:'E8E8E8',pt:.5}});
+  const fd = getFloor(b);
+  if(fd){
+    try{ slide.addImage({data:fd,x:6.851,y:4.357,w:2.757,h:2.28,sizing:{type:'contain',w:2.757,h:2.28}}); }catch(e){}
+  } else {
+    slide.addText('도면 없음',{x:6.851,y:4.357,w:2.757,h:2.28,fontSize:9,color:'CCCCCC',align:'center',valign:'middle'});
+  }
+
+  // ── 공실현황
+  slide.addShape('rect',{x:.372,y:4.043,w:.107,h:.204,fill:{color:'BFBFBF'}});
+  slide.addText('공실현황 / 임대료',{x:.434,y:4.002,w:2.2,h:.286,fontSize:11,bold:true,color:'002060'});
+  slide.addText('단위:원/ 3.3㎡',{x:4.5,y:4.168,w:2.0,h:.236,fontSize:8,color:'888888',align:'right'});
+
+  const vac=(vacancies[b.code]||[]).slice(0,7);
+  const {font:f2, size:sz2} = getCfg();
+  const hdrRow=[
+    vcell('층'), vcell('전용면적\n(평)'), vcell('임대면적\n(평)'),
+    vcell('보증금\n(원/평)'), vcell('임대료\n(원/평)'), vcell('관리비\n(원/평)'), vcell('입주시기')
+  ];
+
+  if(vac.length === 0) {
+    // 공실 없음: 헤더 + "공실 없음" 텍스트
+    const emptyRows = Array.from({length:7}, (_,ri) => {
+      const bg = ri%2===1?'F8F8F8':'FFFFFF';
+      return Array(7).fill(dcell('', bg, 'center'));
+    });
+    slide.addTable([hdrRow,...emptyRows],{
+      x:.369,y:4.404,w:6.154,h:2.187,
+      rowH:.273, border:{pt:.5,color:'BFBFBF'},
+      colW:[.60,.85,.85,1.05,1.05,1.00,.754]
+    });
+    slide.addText('공실 없음',{
+      x:.369, y:4.677, w:6.154, h:1.64,
+      fontSize:18, bold:true, color:'AAAAAA',
+      align:'center', valign:'middle', fontFace:f2
+    });
+  } else {
+    const dataRows = Array.from({length:7},(_,ri)=>{
+      const v=vac[ri];
+      const bg = ri%2===1?'F8F8F8':'FFFFFF';
+      return v ? [
+        dcell(v.floor,bg,'center'), dcell(v.net,bg,'center'), dcell(v.lease,bg,'center'),
+        dcell(v.dep,bg,'right'), dcell(v.rent,bg,'right'), dcell(v.mgmt,bg,'right'), dcell(v.move,bg,'center')
+      ] : Array(7).fill(dcell('',bg,'center'));
+    });
+    slide.addTable([hdrRow,...dataRows],{
+      x:.369,y:4.404,w:6.154,h:2.187,
+      rowH:.273, border:{pt:.5,color:'BFBFBF'},
+      colW:[.60,.85,.85,1.05,1.05,1.00,.754]
+    });
+  }
+
+  addFooter(slide, num, total);
+}
+
+function cell(txt,isKey=true) {
+  const f=getCfg().font, sz=getCfg().size;
+  return {text:String(txt), options:isKey
+    ? {bold:true,color:'555577',fontSize:sz,fill:{color:'F5F5F8'},align:'center',valign:'middle',fontFace:f}
+    : {fontSize:sz,color:'1a1a2e',valign:'middle',wrap:true,fontFace:f}};
+}
+function vcell(txt) {
+  const f=getCfg().font, sz=getCfg().size;
+  return {text:txt, options:{bold:true,color:'FFFFFF',fill:{color:'002060'},align:'center',valign:'middle',fontSize:sz,fontFace:f}};
+}
+function dcell(txt,bg,align) {
+  const f=getCfg().font, sz=getCfg().size;
+  return {text:String(txt), options:{fontSize:sz,align,fill:{color:bg},valign:'middle',fontFace:f}};
+}
+function noImg(slide,x,y,w,h,msg) {
+  slide.addShape('rect',{x,y,w,h,fill:{color:'EEEEEE'}});
+  slide.addText(msg,{x,y,w,h,fontSize:10,color:'BBBBBB',align:'center',valign:'middle'});
+}
+
+// ═══ 이미지 관리 모달 ═══
+let mgrTab = 'ph'; // 'ph' or 'fl'
+
+function openImgMgr() {
+  document.getElementById('imgMgrModal').style.display = 'flex';
+  switchTab('ph');
+}
+function closeImgMgr() {
+  document.getElementById('imgMgrModal').style.display = 'none';
+  refreshMatch();
+}
+
+function switchTab(tab) {
+  mgrTab = tab;
+  document.getElementById('tabPh').style.cssText = tab==='ph'
+    ? 'padding:10px 18px;border:none;background:none;font-weight:700;font-size:12px;cursor:pointer;border-bottom:2px solid #002060;color:#002060;margin-bottom:-2px'
+    : 'padding:10px 18px;border:none;background:none;font-weight:700;font-size:12px;cursor:pointer;border-bottom:2px solid transparent;color:#888;margin-bottom:-2px';
+  document.getElementById('tabFl').style.cssText = tab==='fl'
+    ? 'padding:10px 18px;border:none;background:none;font-weight:700;font-size:12px;cursor:pointer;border-bottom:2px solid #002060;color:#002060;margin-bottom:-2px'
+    : 'padding:10px 18px;border:none;background:none;font-weight:700;font-size:12px;cursor:pointer;border-bottom:2px solid transparent;color:#888;margin-bottom:-2px';
+  renderImgMgr();
+}
+
+function renderImgMgr() {
+  const store = mgrTab === 'ph' ? photos : floors;
+  const search = (document.getElementById('imgSearch').value||'').toLowerCase();
+  const keys = Object.keys(store).filter(k => !search || k.includes(search));
+  const grid = document.getElementById('imgMgrGrid');
+
+  document.getElementById('phCnt').textContent = Object.keys(photos).length;
+  document.getElementById('flCnt').textContent = Object.keys(floors).length;
+  document.getElementById('imgMgrFooter').textContent = `${keys.length}개 표시 중 (전체 ${Object.keys(store).length}개)`;
+
+  if(!keys.length) {
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:#ccc;padding:40px;font-size:13px">
+      ${search ? '검색 결과가 없습니다' : '업로드된 이미지가 없습니다'}</div>`;
+    return;
+  }
+
+  grid.innerHTML = keys.map(k => `
+    <div style="border:1px solid #e8e8e8;border-radius:8px;overflow:hidden;position:relative;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.06)">
+      <div style="height:100px;background:#f5f5f5;display:flex;align-items:center;justify-content:center;overflow:hidden">
+        <img src="${store[k]}" style="max-width:100%;max-height:100%;object-fit:contain">
+      </div>
+      <div style="padding:6px 8px">
+        <div style="font-size:10px;font-weight:700;color:#333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${k}">${k}</div>
+        <div style="display:flex;gap:4px;margin-top:5px">
+          <label style="flex:1;background:#f0f4ff;border:1px solid #c8d8f8;border-radius:4px;padding:3px 0;text-align:center;font-size:10px;color:#2c4a8a;cursor:pointer;font-weight:700">
+            🔄 교체
+            <input type="file" accept="image/*" style="display:none" onchange="replaceImg('${k}', this)">
+          </label>
+          <button onclick="deleteImg('${k}')" style="flex:1;background:#fff0f0;border:1px solid #ffcdd2;border-radius:4px;padding:3px 0;font-size:10px;color:#e53935;cursor:pointer;font-weight:700">🗑 삭제</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function deleteImg(key) {
+  if(!confirm(`"${key}" 이미지를 삭제하시겠습니까?`)) return;
+  const store = mgrTab === 'ph' ? photos : floors;
+  delete store[key];
+  renderImgMgr();
+  refreshImgStat();
+  const pc = Object.keys(photos).length, fc = Object.keys(floors).length;
+  if(!pc && !fc) document.getElementById('imgMgrBtn').style.display = 'none';
+}
+
+function replaceImg(key, input) {
+  const file = input.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = evt => {
+    const store = mgrTab === 'ph' ? photos : floors;
+    store[key] = evt.target.result;
+    renderImgMgr();
+    refreshMatch();
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearAllImgs() {
+  const label = mgrTab === 'ph' ? '대표사진' : '도면';
+  const store = mgrTab === 'ph' ? photos : floors;
+  const n = Object.keys(store).length;
+  if(!n) return;
+  if(!confirm(`${label} ${n}개를 모두 삭제하시겠습니까?`)) return;
+  if(mgrTab === 'ph') { for(const k in photos) delete photos[k]; }
+  else { for(const k in floors) delete floors[k]; }
+  renderImgMgr();
+  refreshImgStat();
+}
+
+function mgrAddFiles(input) {
+  const files = Array.from(input.files); if(!files.length) return;
+  const store = mgrTab === 'ph' ? photos : floors;
+  let done = 0;
+  files.forEach(f => {
+    const reader = new FileReader();
+    reader.onload = evt => {
+      store[f.name.replace(/\.[^.]+$/,'').toLowerCase()] = evt.target.result;
+      if(++done === files.length) { renderImgMgr(); refreshImgStat(); refreshMatch(); }
+    };
+    reader.readAsDataURL(f);
+  });
+  input.value = '';
+}
+
+function showOv(show,main,sub){
+  document.getElementById('ov').classList.toggle('show',show);
+  if(main!==undefined) document.getElementById('ot').textContent=main;
+  if(sub!==undefined) document.getElementById('os').textContent=sub;
+}
+function dateStr(){
+  const d=new Date();
+  return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// ═══ 설정값 ═══
+function getCfg() {
+  return {
+    font: document.getElementById('cfgFont').value,
+    size: parseInt(document.getElementById('cfgSize').value),
+    withMap: document.getElementById('cfgMap').checked
+  };
+}
+
+// 지도 옵션 변경 시 라벨 업데이트
+document.getElementById('cfgMap').addEventListener('change', function() {
+  document.getElementById('cfgMapLbl').textContent = this.checked
+    ? '포함 (건물당 약 5초 소요)' : '생략 (빠른 생성)';
+});
+
+// 선택 수 변경 시 성능 경고
+// ═══ 섹션 접기/펼치기 ═══
+function toggleSec(id) {
+  const body = document.getElementById(id);
+  const arrow = document.getElementById(id+'-arrow');
+  const isOpen = body.classList.contains('open');
+  body.classList.toggle('open', !isOpen);
+  if(arrow) arrow.textContent = isOpen ? '▶' : '▼';
+}
+
+function collapseSec(id, doneText) {
+  const body = document.getElementById(id);
+  const arrow = document.getElementById(id+'-arrow');
+  const done = document.getElementById(id+'-done');
+  body.classList.remove('open');
+  if(arrow) arrow.textContent = '▶';
+  if(done) { done.textContent = '✅ ' + doneText; done.classList.add('show'); }
+}
+
+// ═══ 탭 전환 ═══
+function switchMainTab(tab) {
+  document.getElementById('tab-geo').style.display = tab==='geo' ? 'block' : 'none';
+  document.getElementById('tab-ppt').style.display = tab==='ppt' ? 'block' : 'none';
+  const activeStyle = 'background:rgba(255,255,255,.9);border:none;color:#002060;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit';
+  const inactiveStyle = 'background:rgba(255,255,255,.2);border:none;color:#fff;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit';
+  document.getElementById('tabBtn1').style.cssText = tab==='geo' ? activeStyle : inactiveStyle;
+  document.getElementById('tabBtn2').style.cssText = tab==='ppt' ? activeStyle : inactiveStyle;
+}
+
+// ═══ 좌표 추출 탭 기능 ═══
+let geoBuildings = [];
+let geoOriginalWb = null;  // 원본 워크북 저장
+
+let geoOriginalFile = null;  // 원본 파일명
+
+function loadGeoExcel(input) {
+  const file = input.files[0]; if(!file) return;
+  geoOriginalFile = file.name;
+  const reader = new FileReader();
+  reader.onload = evt => {
+    geoOriginalWb = XLSX.read(evt.target.result, {type:'binary'});
+    const ws = geoOriginalWb.Sheets[geoOriginalWb.SheetNames[0]];
+    const raw = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+    const hdr = raw[1]||[];
+    const ci = n => hdr.findIndex(h=>h&&String(h).includes(n));
+    const iCode=0, iName=ci('빌딩명')>=0?ci('빌딩명'):ci('Building');
+    const iAddr=ci('주소'), iLat=ci('위도'), iLon=ci('경도');
+
+    geoBuildings = [];
+    const seen = new Set();
+    for(let r=2;r<raw.length;r++) {
+      const row = raw[r];
+      const code = String(row[iCode]||'').trim();
+      const name = String(iName>=0?row[iName]:'').trim();
+      if(!name||name==='빌딩명'||seen.has(code)) continue;
+      seen.add(code);
+      geoBuildings.push({
+        code, name,
+        address: String(iAddr>=0?row[iAddr]:'').trim(),
+        lat: iLat>=0&&row[iLat]&&!isNaN(Number(row[iLat])) ? Number(row[iLat]) : null,
+        lon: iLon>=0&&row[iLon]&&!isNaN(Number(row[iLon])) ? Number(row[iLon]) : null,
+        rowIdx: r,  // 원본 행 인덱스 저장
+        status: (iLat>=0&&row[iLat]&&!isNaN(Number(row[iLat]))) ? 'exists' : 'pending'
+      });
+    }
+    document.getElementById('geoFileLabel').textContent = `✅ ${file.name} (${geoBuildings.length}개 건물)`;
+    document.getElementById('startGeoBtn').disabled = false;
+    renderGeoTable();
+    document.getElementById('geoResultWrap').style.display = 'block';
+
+    const existCount = geoBuildings.filter(b=>b.status==='exists').length;
+    if(existCount > 0 && existCount === geoBuildings.length) {
+      document.getElementById('exportGeoBtn').style.display = 'inline-flex';
+    }
+  };
+  reader.readAsBinaryString(file);
+}
+
+function renderGeoTable() {
+  const tbody = document.getElementById('geoResultBody');
+  tbody.innerHTML = geoBuildings.map((b,i) => {
+    const statusColor = b.status==='ok'?'#27ae60':b.status==='fail'?'#e74c3c':b.status==='exists'?'#4472C4':'#aaa';
+    const statusText = b.status==='ok'?'✅ Kakao':b.status==='ok_osm'?'⚠️ OSM':b.status==='fail'?'❌ 실패':b.status==='exists'?'📌 기존':b.status==='pending'?'대기중':'조회중';
+    const rowBg = i%2===0?'#fff':'#f9f9fc';
+    return `<tr style="background:${rowBg}">
+      <td style="padding:8px 14px;color:#aaa">${i+1}</td>
+      <td style="padding:8px 14px;font-weight:600">${b.name}</td>
+      <td style="padding:8px 14px;color:#666">${b.address||'-'}</td>
+      <td style="padding:8px 14px;text-align:center;font-size:11px;font-family:monospace">${b.lat?b.lat.toFixed(6):'-'}</td>
+      <td style="padding:8px 14px;text-align:center;font-size:11px;font-family:monospace">${b.lon?b.lon.toFixed(6):'-'}</td>
+      <td style="padding:8px 14px;text-align:center;font-size:11px;color:${statusColor};font-weight:700">${statusText}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function startBatchGeo() {
+  document.getElementById('startGeoBtn').disabled = true;
+  const pending = geoBuildings.filter(b=>b.status==='pending');
+  let done=0, fail=0;
+  const total = pending.length;
+
+  document.getElementById('geoProg').style.display = 'block';
+  const progBar = document.getElementById('geoProgBar');
+  const progCount = document.getElementById('geoProgCount');
+  const progEta = document.getElementById('geoProgEta');
+  const progFail = document.getElementById('geoProgFail');
+  const startTime = Date.now();
+
+  for(const b of pending) {
+    b.status = 'loading';
+    const geo = await geocode(b.address, b.name);
+    if(geo) {
+      b.lat=geo.lat; b.lon=geo.lon;
+      b.status = geo.src==='osm' ? 'ok_osm' : 'ok';
+      done++;
+    } else {
+      b.status = 'fail'; fail++;
+    }
+    const elapsed = (Date.now()-startTime)/1000;
+    const completed = done+fail;
+    const pct = Math.round(completed/total*100);
+    const eta = completed>0 ? Math.round((elapsed/completed)*(total-completed)) : '?';
+    progBar.style.width = pct+'%';
+    progCount.textContent = `${completed} / ${total} 완료`;
+    progFail.textContent = fail>0 ? `실패 ${fail}건` : '';
+    progEta.textContent = completed<total ? `약 ${eta}초 남음` : `완료! (${Math.round(elapsed)}초)`;
+    renderGeoTable();
+    await new Promise(r=>setTimeout(r,300));
+  }
+
+  document.getElementById('startGeoBtn').disabled = false;
+  document.getElementById('exportGeoBtn').style.display = 'inline-flex';
+  const resultTitle = document.getElementById('geoResultTitle');
+  resultTitle.textContent = `조회 완료: ${done}개 성공, ${fail}개 실패`;
+}
+
+function exportGeoExcel() {
+  if(!geoOriginalWb) return;
+
+  // 원본 워크북 복사 (첫 번째 시트 기준)
+  const wsName = geoOriginalWb.SheetNames[0];
+  const ws = geoOriginalWb.Sheets[wsName];
+  const raw = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+
+  // 헤더 행(row[1])에 위도/경도 컬럼 위치 확인 or 추가
+  const hdr = raw[1] || [];
+  let iLat = hdr.findIndex(h=>h&&String(h).includes('위도'));
+  let iLon = hdr.findIndex(h=>h&&String(h).includes('경도'));
+  const maxCol = hdr.length;
+
+  if(iLat < 0) { iLat = maxCol; hdr[iLat] = '위도'; }
+  if(iLon < 0) { iLon = Math.max(maxCol, iLat+1); hdr[iLon] = '경도'; }
+  raw[1] = hdr;
+
+  // 영문 헤더(row[0])에도 추가
+  if(raw[0]) {
+    raw[0][iLat] = raw[0][iLat] || 'Latitude';
+    raw[0][iLon] = raw[0][iLon] || 'Longitude';
+  }
+
+  // 빌딩코드로 매핑해서 위도/경도 업데이트
+  const coordMap = {};
+  geoBuildings.forEach(b => { if(b.lat && b.lon) coordMap[b.code] = {lat:b.lat, lon:b.lon}; });
+
+  for(let r=2; r<raw.length; r++) {
+    const code = String(raw[r][0]||'').trim();
+    if(coordMap[code]) {
+      raw[r][iLat] = coordMap[code].lat;
+      raw[r][iLon] = coordMap[code].lon;
+    }
+  }
+
+  // 새 워크북으로 저장 (원본 양식 유지)
+  const newWb = XLSX.utils.book_new();
+  const newWs = XLSX.utils.aoa_to_sheet(raw);
+
+  // 원본 컬럼 너비 복사
+  if(ws['!cols']) newWs['!cols'] = [...ws['!cols'], {wch:12}, {wch:12}];
+
+  XLSX.utils.book_append_sheet(newWb, newWs, wsName);
+
+  // 나머지 시트도 복사
+  geoOriginalWb.SheetNames.slice(1).forEach(sn => {
+    XLSX.utils.book_append_sheet(newWb, geoOriginalWb.Sheets[sn], sn);
+  });
+
+  const fname = geoOriginalFile ? geoOriginalFile.replace(/\.xlsx?$/i, `_좌표_${dateStr()}.xlsx`) : `DB_좌표_${dateStr()}.xlsx`;
+  XLSX.writeFile(newWb, fname);
+}
+
+function updateKakaoStatus() {
+  const key = document.getElementById('cfgKakaoKey')?.value?.trim();
+  const el = document.getElementById('kakaoStatus');
+  if(!el) return;
+  el.textContent = key ? '✅' : '⚠️';
+  el.title = key ? 'Kakao API 키 설정됨' : 'API 키 없음 - OpenStreetMap 사용';
+}
+
+function updatePerfWarn() {
+  const n = buildings.filter(b=>b.selected).length;
+  const withMap = document.getElementById('cfgMap').checked;
+  const warn = document.getElementById('perfWarn');
+  if(n >= 50 && withMap) {
+    const mins = Math.round(n * 5 / 60);
+    warn.style.display = 'block';
+    warn.innerHTML = `⚠️ <strong>${n}개 건물 + 지도 포함</strong> → 예상 소요 약 <strong>${mins}분</strong><br>빠른 생성이 필요하면 위 "지도 포함"을 해제하세요.`;
+  } else if(n >= 200) {
+    warn.style.display = 'block';
+    warn.innerHTML = `⚠️ <strong>${n}개 건물</strong> — 이미지가 많으면 브라우저 메모리 부족이 발생할 수 있습니다. <strong>100개씩 나눠서</strong> 생성하는 것을 권장합니다.`;
+  } else {
+    warn.style.display = 'none';
+  }
+}
+</script>
+</body>
+</html>
