@@ -820,30 +820,18 @@ async function initPreviewMap(i) {
     return;
   }
 
-  // Leaflet 지도 렌더
+  // 타일 직접 조립으로 캡처
   if(st) st.textContent = '⏳ 지도 로딩중';
   try {
-    const map = L.map(el, {zoomControl:false, attributionControl:false, dragging:false, scrollWheelZoom:false});
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {crossOrigin:'anonymous'}).addTo(map);
-    map.setView([geo.lat, geo.lon], 16);
-    L.circleMarker([geo.lat, geo.lon], {radius:8, fillColor:'#e74c3c', color:'#fff', weight:2, fillOpacity:1}).addTo(map);
-
-    // 타일 로딩 후 캡처
-    setTimeout(async () => {
-      try {
-        const box = document.getElementById(`mapbox_${i}`);
-        if(!box) return;
-        const canvas = await html2canvas(box, {useCORS:true, allowTaint:false, logging:false});
-        const img = canvas.toDataURL('image/jpeg', 0.9);
-        buildings[i].mapCapture = img;
-        map.remove();
-        el.innerHTML = `<img src="${img}" style="width:100%;height:100%;object-fit:cover">`;
-        if(st) st.textContent = '✅ 캡처됨';
-        if(geoTotal > 0) updateGeoProgress(false);
-      } catch(e) {
-        if(st) st.textContent = '⚠️ 캡처실패';
-      }
-    }, 2500);
+    const img = await captureMap(geo.lat, geo.lon);
+    if(img) {
+      buildings[i].mapCapture = img;
+      el.innerHTML = `<img src="${img}" style="width:100%;height:100%;object-fit:cover">`;
+      if(st) st.textContent = '✅ 캡처됨';
+    } else {
+      if(st) st.textContent = '⚠️ 캡처실패';
+    }
+    if(geoTotal > 0) updateGeoProgress(!img);
   } catch(e) {
     if(st) st.textContent = '❌ 오류';
   }
@@ -931,53 +919,69 @@ async function geocode(addr, buildingName) {
   return null;
 }
 
+// 타일 직접 fetch → canvas 조립 (Leaflet/leafletImage 의존 없음)
 async function captureMap(lat, lon) {
-  return new Promise(resolve => {
-    const W=700, H=450;
-    const zoom = parseInt(document.getElementById('cfgZoom')?.value||16);
+  const W = 700, H = 450;
+  const zoom = parseInt(document.getElementById('cfgZoom')?.value || 16);
+  const n = Math.pow(2, zoom);
 
-    // body에 직접 붙이는 임시 div (화면 밖 x, 하지만 DOM에 존재)
-    const wrapper = document.createElement('div');
-    wrapper.style.cssText = `position:absolute;left:0;top:0;width:${W}px;height:${H}px;z-index:99999;visibility:hidden`;
-    document.body.appendChild(wrapper);
+  // 중심 좌표의 타일 위치 (소수점 포함)
+  const centerTileX = (lon + 180) / 360 * n;
+  const mercN = Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180));
+  const centerTileY = (1 - mercN / Math.PI) / 2 * n;
 
-    let done = false;
-    const map = L.map(wrapper, {zoomControl:false, attributionControl:false});
-    const layer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {crossOrigin:'anonymous'});
-    let tTotal=0, tLoaded=0;
-    layer.on('tileloadstart', ()=>tTotal++);
-    layer.on('tileload', ()=>{ tLoaded++; if(tLoaded>=tTotal&&tTotal>0) doCapture(); });
-    layer.addTo(map);
-    map.setView([lat, lon], zoom);
-    L.circleMarker([lat,lon],{radius:12,fillColor:'#e74c3c',color:'#fff',weight:3,fillOpacity:1}).addTo(map);
+  // 중심 타일 인덱스 및 타일 내 픽셀 오프셋
+  const tx0 = Math.floor(centerTileX);
+  const ty0 = Math.floor(centerTileY);
+  const cx = (centerTileX - tx0) * 256; // 타일 내 x 오프셋 (px)
+  const cy = (centerTileY - ty0) * 256; // 타일 내 y 오프셋 (px)
 
-    async function doCapture() {
-      if(done) return; done=true;
-      await new Promise(r=>setTimeout(r,500));
-      try {
-        // 잠깐 visible로 변경 후 캡처
-        wrapper.style.visibility = 'visible';
-        map.invalidateSize();
-        await new Promise(r=>setTimeout(r,200));
-        const canvas = await html2canvas(wrapper, {
-          useCORS:true, allowTaint:false, logging:false,
-          width:W, height:H,
-          windowWidth:W, windowHeight:H,
-          scrollX:0, scrollY:0
-        });
-        wrapper.style.visibility = 'hidden';
-        const b64 = canvas.toDataURL('image/jpeg', .92);
-        map.remove();
-        document.body.removeChild(wrapper);
-        resolve(b64);
-      } catch(e) {
-        map.remove();
-        document.body.removeChild(wrapper);
-        resolve(null);
+  // 타일(tx0,ty0)의 canvas 내 시작 좌표
+  const originX = W / 2 - cx;
+  const originY = H / 2 - cy;
+
+  // 필요한 타일 목록 계산
+  const tasks = [];
+  for (let dy = -3; dy <= 3; dy++) {
+    for (let dx = -3; dx <= 3; dx++) {
+      const tx = tx0 + dx;
+      const ty = ty0 + dy;
+      const px = Math.round(originX + dx * 256);
+      const py = Math.round(originY + dy * 256);
+      if (px + 256 > 0 && px < W && py + 256 > 0 && py < H && tx >= 0 && ty >= 0 && tx < n && ty < n) {
+        tasks.push({ tx, ty, px, py });
       }
     }
-    setTimeout(()=>{ if(!done) doCapture(); }, 5000);
-  });
+  }
+
+  // canvas 생성
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#e8effd';
+  ctx.fillRect(0, 0, W, H);
+
+  // 타일 병렬 fetch & draw
+  await Promise.all(tasks.map(({ tx, ty, px, py }) => new Promise(res => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    const sub = ['a', 'b', 'c'][Math.abs(tx + ty) % 3];
+    img.src = `https://${sub}.tile.openstreetmap.org/${zoom}/${tx}/${ty}.png`;
+    img.onload = () => { ctx.drawImage(img, px, py); res(); };
+    img.onerror = res;
+    setTimeout(res, 5000); // 타임아웃
+  })));
+
+  // 마커 (캔버스 정중앙 = lat/lon 정확히 일치)
+  const mx = W / 2, my = H / 2;
+  ctx.beginPath(); ctx.arc(mx, my, 11, 0, 2 * Math.PI);
+  ctx.fillStyle = '#e74c3c'; ctx.fill();
+  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2.5; ctx.stroke();
+  // 중심 흰 점
+  ctx.beginPath(); ctx.arc(mx, my, 3, 0, 2 * Math.PI);
+  ctx.fillStyle = '#ffffff'; ctx.fill();
+
+  try { return canvas.toDataURL('image/jpeg', 0.92); } catch(e) { return null; }
 }
 
 // ═══ PPT 생성 ═══
