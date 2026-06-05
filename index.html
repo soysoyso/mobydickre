@@ -65,17 +65,26 @@ body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f0
 .pcard-head{background:#002060;color:#fff;padding:11px 14px;display:flex;justify-content:space-between;align-items:center}
 .pcard-head h4{font-size:13px;font-weight:700}
 .pcard-head .num{background:rgba(255,255,255,.15);padding:2px 7px;border-radius:20px;font-size:10px}
+/* PPT 비율 기반 미리보기 카드
+   PPT 10"×7.5" 기준:
+   - 건물사진: 2.21"×2.59" → aspect-ratio 2.21/2.59 ≈ 0.853 (세로형)
+   - 지도:     2.75"×2.23" → aspect-ratio 2.75/2.23 ≈ 1.233 (가로형)
+   - 도면:     2.76"×2.28" → aspect-ratio 2.76/2.28 ≈ 1.211 (가로형)
+*/
 .pcard-body{display:grid;grid-template-columns:1fr 1fr}
-.pcl{padding:12px;border-right:1px solid #f0f0f0}
-.pcr{padding:12px}
-.photo-box{width:100%;height:110px;border-radius:5px;background:#f0f0f0;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:8px}
+.pcl{padding:10px;border-right:1px solid #f0f0f0}
+.pcr{padding:10px}
+/* 사진: 세로형 (PPT 비율 0.853:1) */
+.photo-box{width:100%;aspect-ratio:2.21/2.59;border-radius:5px;background:#f0f0f0;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:7px}
 .photo-box img{width:100%;height:100%;object-fit:cover}
 .itbl{width:100%;border-collapse:collapse;font-size:10px}
 .itbl td{padding:3px 0;vertical-align:top}
 .itbl td:first-child{color:#999;width:48px}
 .itbl td:last-child{color:#333;font-weight:600}
-.map-box{width:100%;height:120px;border-radius:5px;background:#e8effd;overflow:hidden;margin-bottom:7px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#aaa;flex-direction:column;gap:3px}
-.floor-box{width:100%;height:65px;border-radius:5px;background:#f9f9f9;border:1px solid #eee;display:flex;align-items:center;justify-content:center;overflow:hidden}
+/* 지도: 가로형 (PPT 비율 1.233:1) */
+.map-box{width:100%;aspect-ratio:2.75/2.23;border-radius:5px;background:#e8effd;overflow:hidden;margin-bottom:7px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#aaa;flex-direction:column;gap:3px}
+/* 도면: 가로형 (PPT 비율 1.211:1) */
+.floor-box{width:100%;aspect-ratio:2.76/2.28;border-radius:5px;background:#f9f9f9;border:1px solid #eee;display:flex;align-items:center;justify-content:center;overflow:hidden}
 .floor-box img{max-width:100%;max-height:100%;object-fit:contain}
 .floor-box span{font-size:10px;color:#ccc}
 .fn-row{display:flex;gap:6px;padding:8px 12px;border-top:1px solid #f0f0f0;background:#fafbff}
@@ -1347,6 +1356,20 @@ function getCfg() {
 document.getElementById('cfgMap').addEventListener('change', function() {
   document.getElementById('cfgMapLbl').textContent = this.checked
     ? '포함 (건물당 약 5초 소요)' : '생략 (빠른 생성)';
+});
+
+// 지도 범위(zoom) 변경 시 → 캐시 전체 초기화 후 재캡처
+document.getElementById('cfgZoom').addEventListener('change', function() {
+  if(!buildings.length) return;
+  // 캐시 클리어
+  buildings.forEach(b => { b.mapCapture = null; });
+  // 미리보기 카드가 렌더된 상태라면 재캡처
+  const anyMapEl = document.getElementById('mapel_0');
+  if(anyMapEl) {
+    const needGeo = buildings.filter(b => b.lat || b.address).length;
+    if(needGeo > 0) startGeoProgress(needGeo);
+    buildings.forEach((_, i) => initPreviewMap(i));
+  }
 });
 
 // 선택 수 변경 시 성능 경고
