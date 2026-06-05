@@ -649,14 +649,14 @@ async function geocode(addr, buildingName) {
   const hasKey = document.getElementById('cfgKakaoKey')?.value?.trim();
 
   if(hasKey) {
-    // Kakao: 주소 검색 먼저 (가장 정확)
-    if(addr) {
-      const r1 = await kakaoGeo(addr);
+    // Kakao: 빌딩명 키워드 먼저 (POI 정확도 높음)
+    if(buildingName) {
+      const r1 = await kakaoKeyword(buildingName);
       if(r1) return r1;
     }
-    // Kakao: 빌딩명 키워드 검색
-    if(buildingName) {
-      const r2 = await kakaoKeyword(buildingName);
+    // Kakao: 주소 검색 폴백
+    if(addr) {
+      const r2 = await kakaoGeo(addr);
       if(r2) return r2;
     }
     // Kakao 실패(CORS 등) 시 OSM 폴백
