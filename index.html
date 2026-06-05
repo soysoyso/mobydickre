@@ -1003,7 +1003,7 @@ async function genPPT() {
     pptx.defineLayout({name:'STD10',width:10,height:7.5});
     pptx.layout = 'STD10';
 
-    // 목록 슬라이드
+    // 목록 슬라이드 (반환값: 목록 페이지 수)
     await addListSlide(pptx, sel);
 
     // 건물 슬라이드
@@ -1078,26 +1078,51 @@ function addFooter(slide, num, total) {
   if(num) slide.addText(`${num} / ${total}`,{x:9.1,y:6.853,w:.5,h:.547,fontSize:8,color:'AAAAAA',align:'right',valign:'middle',fontFace:f});
 }
 
+// 목록 슬라이드 생성 (페이지당 39개, 초과 시 다음 페이지)
+// listPageCount: 목록 슬라이드 총 수 (하이퍼링크 보정용)
 async function addListSlide(pptx, sel) {
-  const slide = pptx.addSlide();
   const {font:f, size:sz} = getCfg();
-  slide.background={color:'FFFFFF'};
-  addHdr(slide,'GBD Office List','','');
-  slide.addText('임대 안내 건물 목록',{x:.37,y:1.05,w:9.26,h:.65,fontSize:24,bold:true,color:'002060',valign:'middle',fontFace:f});
-  slide.addShape('line',{x:.37,y:1.65,w:9.26,h:0,line:{color:'4472C4',width:2}});
-  const rows = Math.ceil(sel.length/3);
-  const bgH = Math.max(rows*0.29+0.5, 4.5);
-  slide.addShape('rect',{x:.25,y:1.85,w:9.5,h:bgH,fill:{color:'F5F7FA'}});
-  const cx = [.40, 3.73, 7.06];
-  // 슬라이드 2부터 건물 슬라이드 (1=목록)
-  sel.forEach((b,i)=>{
-    slide.addText(`· ${b.name}`,{
-      x:cx[i%3], y:1.95+Math.floor(i/3)*0.29, w:3.2, h:.29,
-      fontSize:sz+2, color:'002060', valign:'middle', fontFace:f,
-      hyperlink:{slide: i+2}   // 클릭 시 해당 건물 슬라이드로 이동
+  const PER_PAGE = 39;   // 3열 × 13행
+  const listPageCount = Math.ceil(sel.length / PER_PAGE);
+  const colX = [.40, 3.73, 7.06];
+  const ROW_H = 0.285;
+  const START_Y = 1.95;
+
+  for(let p = 0; p < listPageCount; p++) {
+    const slide = pptx.addSlide();
+    slide.background = {color:'FFFFFF'};
+
+    // 헤더
+    const pageLabel = listPageCount > 1 ? `GBD Office List  (${p+1}/${listPageCount})` : 'GBD Office List';
+    addHdr(slide, pageLabel, '', '');
+
+    // 타이틀
+    slide.addText('임대 안내 건물 목록', {
+      x:.37, y:1.05, w:9.26, h:.65,
+      fontSize:24, bold:true, color:'002060', valign:'middle', fontFace:f
     });
-  });
-  addFooter(slide, null, null);
+    slide.addShape('line', {x:.37, y:1.65, w:9.26, h:0, line:{color:'4472C4', width:2}});
+    slide.addShape('rect', {x:.25, y:1.82, w:9.5, h:5.0, fill:{color:'F5F7FA'}});
+
+    // 건물 목록 (이 페이지 분)
+    const pageItems = sel.slice(p * PER_PAGE, (p+1) * PER_PAGE);
+    pageItems.forEach((b, i) => {
+      const col = i % 3;
+      const row = Math.floor(i / 3);
+      // 건물 슬라이드 번호 = 목록 페이지 수 + 1(커버) + 건물 전체 인덱스
+      const bldIdx = p * PER_PAGE + i;
+      const slideNum = listPageCount + 1 + bldIdx + 1; // 1=커버, +listPageCount=목록들, +1=1-indexed
+      slide.addText(`· ${b.name}`, {
+        x: colX[col], y: START_Y + row * ROW_H, w:3.2, h:ROW_H,
+        fontSize: sz+2, color:'002060', valign:'middle', fontFace:f,
+        hyperlink: {slide: slideNum}
+      });
+    });
+
+    addFooter(slide, null, null);
+  }
+
+  return listPageCount;
 }
 
 async function addBldSlide(pptx, b, num, total) {
