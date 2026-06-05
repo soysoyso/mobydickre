@@ -106,7 +106,18 @@ body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f0
 <div class="hdr">
   <span style="font-size:22px">🏢</span>
   <div style="flex:1">
-    <h1>MOBYDICK RE · 부동산 PPT 보고서 생성기</h1>
+    <h1>MOBYDICK RE · 부동산 리포트 도구</h1>
+  </div>
+  <!-- 탭 버튼 -->
+  <div style="display:flex;gap:6px;margin-right:10px">
+    <button id="tabBtn1" onclick="switchMainTab('geo')"
+      style="background:rgba(255,255,255,.25);border:none;color:#fff;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit">
+      📍 좌표 추출
+    </button>
+    <button id="tabBtn2" onclick="switchMainTab('ppt')"
+      style="background:rgba(255,255,255,.9);border:none;color:#002060;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit">
+      📑 PPT 생성
+    </button>
   </div>
   <button onclick="document.getElementById('infoModal').style.display='flex'"
     style="background:rgba(255,255,255,.15);border:none;color:#fff;width:30px;height:30px;border-radius:50%;font-size:15px;cursor:pointer;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0"
@@ -164,6 +175,65 @@ body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f0
   </div>
 </div>
 
+<!-- ═══ 좌표 추출 탭 ═══ -->
+<div id="tab-geo" style="display:none;height:calc(100vh - 58px);overflow-y:auto;padding:28px;background:#f0f2f5">
+  <div style="max-width:1000px;margin:0 auto">
+    <div style="background:#fff;border-radius:12px;padding:24px;box-shadow:0 2px 10px rgba(0,0,0,.07);margin-bottom:20px">
+      <h2 style="font-size:16px;color:#002060;margin-bottom:6px">📍 주소 → 좌표 일괄 추출</h2>
+      <p style="font-size:12px;color:#888;margin-bottom:16px">기존 DB 엑셀을 업로드하면 Kakao API로 위도/경도를 조회합니다. 결과를 저장 후 PPT 생성 탭에서 사용하세요.</p>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <label style="background:#002060;color:#fff;padding:9px 18px;border-radius:7px;cursor:pointer;font-size:13px;font-weight:700">
+          📊 DB 엑셀 업로드
+          <input type="file" id="geoExcelInput" accept=".xlsx,.xls" style="display:none" onchange="loadGeoExcel(this)">
+        </label>
+        <button onclick="startBatchGeo()" id="startGeoBtn" class="btn btn-out" disabled>🔍 좌표 일괄 조회</button>
+        <button onclick="exportGeoExcel()" id="exportGeoBtn" class="btn btn-out" style="display:none">📥 좌표 포함 엑셀 저장</button>
+        <span id="geoFileLabel" style="font-size:12px;color:#888"></span>
+      </div>
+    </div>
+
+    <!-- 프로그레스 -->
+    <div id="geoProg" style="display:none;background:#fff;border-radius:12px;padding:18px 24px;box-shadow:0 2px 10px rgba(0,0,0,.07);margin-bottom:20px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+        <span style="font-size:13px;font-weight:700;color:#002060">🔍 좌표 조회 중...</span>
+        <span id="geoProgEta" style="font-size:12px;color:#888"></span>
+      </div>
+      <div style="background:#f0f0f0;border-radius:20px;height:10px;overflow:hidden;margin-bottom:8px">
+        <div id="geoProgBar" style="height:100%;background:linear-gradient(90deg,#4472C4,#002060);border-radius:20px;transition:width .3s;width:0%"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:#888">
+        <span id="geoProgCount">0 / 0</span>
+        <span id="geoProgFail" style="color:#e74c3c"></span>
+      </div>
+    </div>
+
+    <!-- 결과 테이블 -->
+    <div id="geoResultWrap" style="display:none;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,.07)">
+      <div style="padding:14px 20px;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:13px;font-weight:700;color:#002060" id="geoResultTitle">좌표 조회 결과</span>
+        <span style="font-size:11px;color:#888">녹색=성공 / 빨강=실패(OSM 폴백 사용)</span>
+      </div>
+      <div style="overflow-x:auto">
+        <table id="geoResultTable" style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead>
+            <tr style="background:#f8f9fc">
+              <th style="padding:10px 14px;text-align:left;color:#555;font-weight:700;border-bottom:2px solid #e8e8e8">#</th>
+              <th style="padding:10px 14px;text-align:left;color:#555;font-weight:700;border-bottom:2px solid #e8e8e8">빌딩명</th>
+              <th style="padding:10px 14px;text-align:left;color:#555;font-weight:700;border-bottom:2px solid #e8e8e8">주소</th>
+              <th style="padding:10px 14px;text-align:center;color:#555;font-weight:700;border-bottom:2px solid #e8e8e8">위도</th>
+              <th style="padding:10px 14px;text-align:center;color:#555;font-weight:700;border-bottom:2px solid #e8e8e8">경도</th>
+              <th style="padding:10px 14px;text-align:center;color:#555;font-weight:700;border-bottom:2px solid #e8e8e8">상태</th>
+            </tr>
+          </thead>
+          <tbody id="geoResultBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ PPT 생성 탭 ═══ -->
+<div id="tab-ppt">
 <div class="layout">
   <div class="sidebar">
     <div class="sb-top">
@@ -248,6 +318,15 @@ body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f0
             </label>
           </div>
           <!-- 카카오 키는 ? 인포 팝업에서 관리 -->
+          <div style="display:flex;align-items:center;gap:8px">
+            <label style="font-size:11px;color:#555;width:55px;flex-shrink:0">지도 범위</label>
+            <select id="cfgZoom" style="flex:1;border:1px solid #ddd;border-radius:5px;padding:3px 6px;font-size:11px;font-family:inherit">
+              <option value="13">🌏 광역 (구 전체)</option>
+              <option value="15">🏙️ 지역 (동 단위)</option>
+              <option value="16" selected>🏢 기본 (건물)</option>
+              <option value="18">🔍 상세 (건물 근접)</option>
+            </select>
+          </div>
         </div>
 
         <!-- 담당자 설정 -->
@@ -297,12 +376,33 @@ body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f0
   </div>
 
   <div class="main" id="main">
+    <!-- 지도 좌표 조회 프로그레스 -->
+    <div id="geoProgress" style="display:none;background:#fff;border-radius:10px;padding:14px 18px;margin-bottom:16px;box-shadow:0 2px 10px rgba(0,0,0,.07)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <span style="font-size:13px;font-weight:700;color:#002060">🗺️ 지도 좌표 조회 중</span>
+        <span id="geoEta" style="font-size:11px;color:#888"></span>
+      </div>
+      <div style="background:#f0f0f0;border-radius:20px;height:8px;overflow:hidden">
+        <div id="geoBar" style="height:100%;background:linear-gradient(90deg,#4472C4,#002060);border-radius:20px;transition:width .3s;width:0%"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:11px;color:#888">
+        <span id="geoCount">0 / 0 완료</span>
+        <span id="geoFail" style="color:#e74c3c"></span>
+      </div>
+    </div>
+
     <div class="grid" id="grid"></div>
   </div>
 </div>
 
 <div class="abar" id="abar">
   <div class="cinfo"><strong id="acnt">0</strong>개 건물 선택됨</div>
+  <button class="btn btn-out" onclick="batchGeocode()" id="geoBtn" style="gap:5px">
+    📍 좌표 일괄 추출
+  </button>
+  <button class="btn btn-out" id="saveCoordBtn" onclick="saveCoordExcel()" style="display:none">
+    📥 좌표 포함 엑셀 저장
+  </button>
   <button class="btn btn-green" onclick="genPPT()" style="margin-left:auto">📑 선택 건물 PPT 생성</button>
 </div>
 
@@ -312,6 +412,7 @@ body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f0
   <div class="os" id="os">잠시만 기다려주세요</div>
 </div>
 
+</div><!-- /tab-ppt -->
 <div id="hmap"></div>
 
 <!-- 이미지 관리 모달 -->
@@ -583,7 +684,10 @@ function renderGrid() {
           </table>
         </div>
         <div class="pcr">
-          <div class="map-box"><span>🗺️</span><span>${b.address||'주소 없음'}</span></div>
+          <div class="map-box" id="mapbox_${i}" style="position:relative;cursor:pointer" onclick="capturePreviewMap(${i})" title="클릭하면 지도 캡처">
+            <div id="mapel_${i}" style="width:100%;height:100%"></div>
+            <div id="mapst_${i}" style="position:absolute;bottom:3px;right:4px;font-size:9px;background:rgba(0,0,0,.45);color:#fff;padding:1px 5px;border-radius:3px">⏳ 로딩중</div>
+          </div>
           <div class="floor-box" id="fb_${i}">${f?`<img src="${f}">`:'<span>도면 없음</span>'}</div>
         </div>
       </div>
@@ -609,6 +713,146 @@ function renderGrid() {
       </div>`:''}`;
     grid.appendChild(card);
   });
+
+  // 모든 카드 렌더 후 지도 초기화
+  const needGeo = buildings.filter(b => !b.mapCapture).length;
+  if(needGeo > 0) startGeoProgress(needGeo);
+  buildings.forEach((b, i) => initPreviewMap(i));
+}
+
+// ═══ 프로그레스 관리 ═══
+let geoTotal = 0, geoDone = 0, geoFailed = 0, geoStartTime = 0;
+
+function startGeoProgress(total) {
+  geoTotal = total; geoDone = 0; geoFailed = 0; geoStartTime = Date.now();
+  const el = document.getElementById('geoProgress');
+  if(el) el.style.display = 'block';
+  updateGeoProgress();
+}
+
+function updateGeoProgress(failed=false) {
+  if(failed) geoFailed++;
+  else geoDone++;
+  const pct = Math.round((geoDone + geoFailed) / geoTotal * 100);
+  const elapsed = (Date.now() - geoStartTime) / 1000;
+  const done = geoDone + geoFailed;
+  const remaining = done > 0 ? Math.round((elapsed / done) * (geoTotal - done)) : '?';
+  document.getElementById('geoBar').style.width = pct + '%';
+  document.getElementById('geoCount').textContent = `${done} / ${geoTotal} 완료`;
+  document.getElementById('geoFail').textContent = geoFailed > 0 ? `실패 ${geoFailed}건` : '';
+  document.getElementById('geoEta').textContent = done < geoTotal
+    ? `약 ${remaining}초 남음` : `완료 (${Math.round(elapsed)}초 소요)`;
+  if(done >= geoTotal) {
+    document.getElementById('saveCoordBtn').style.display = 'inline-flex';
+  }
+}
+
+// 좌표 일괄 추출 (순차 처리 - API rate limit 준수)
+async function batchGeocode() {
+  const targets = buildings.filter(b => !b.lat || !b.lon);
+  if(targets.length === 0) {
+    alert('모든 건물에 이미 좌표가 있습니다.');
+    document.getElementById('saveCoordBtn').style.display = 'inline-flex';
+    return;
+  }
+  document.getElementById('geoBtn').disabled = true;
+  startGeoProgress(targets.length);
+
+  for(const b of targets) {
+    const geo = await geocode(b.address, b.name);
+    if(geo) { b.lat = geo.lat; b.lon = geo.lon; updateGeoProgress(false); }
+    else { updateGeoProgress(true); }
+    await new Promise(r => setTimeout(r, 300)); // rate limit 방지
+  }
+
+  document.getElementById('geoBtn').disabled = false;
+  // 지도 미리보기 초기화
+  buildings.forEach((_, i) => initPreviewMap(i));
+}
+
+// 좌표 포함 엑셀 저장
+function saveCoordExcel() {
+  const headers = ['빌딩코드','빌딩명','주소','위도','경도','지하철역','도보','연면적','규모','준공연도','전용면적(평)','임대면적(평)','전용률','총 주차','총 승강기'];
+  const rows = buildings.map(b => [
+    b.code, b.name, b.address,
+    b.lat || '', b.lon || '',
+    b.location, '',
+    b.gfa, b.floors, b.year,
+    b.netArea, '', b.ratio,
+    b.parking, b.elevator
+  ]);
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  ws['!cols'] = headers.map((h,i) => ({wch: i<2?20:i<4?12:15}));
+  XLSX.utils.book_append_sheet(wb, ws, '건물DB_좌표포함');
+  XLSX.writeFile(wb, `건물DB_좌표포함_${dateStr()}.xlsx`);
+}
+
+// 미리보기 지도 초기화 + 자동 캡처
+async function initPreviewMap(i) {
+  const b = buildings[i];
+  const el = document.getElementById(`mapel_${i}`);
+  const st = document.getElementById(`mapst_${i}`);
+  if(!el) return;
+
+  // 이미 캡처된 경우: 이미지로 표시
+  if(b.mapCapture) {
+    el.innerHTML = `<img src="${b.mapCapture}" style="width:100%;height:100%;object-fit:cover">`;
+    if(st) st.textContent = '✅ 캡처됨';
+    return;
+  }
+
+  if(st) st.textContent = '⏳ 좌표 조회중';
+
+  // 좌표 가져오기
+  let geo = null;
+  if(b.lat && b.lon) {
+    geo = {lat:b.lat, lon:b.lon};
+  } else {
+    geo = await geocode(b.address, b.name);
+    if(geo) { b.lat = geo.lat; b.lon = geo.lon; }
+  }
+
+  if(!geo) {
+    el.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;font-size:9px;color:#aaa;flex-direction:column;gap:2px"><span>🗺️</span><span>좌표 없음</span></div>`;
+    if(st) st.textContent = '❌ 실패';
+    if(geoTotal > 0) updateGeoProgress(true);
+    return;
+  }
+
+  // Leaflet 지도 렌더
+  if(st) st.textContent = '⏳ 지도 로딩중';
+  try {
+    const map = L.map(el, {zoomControl:false, attributionControl:false, dragging:false, scrollWheelZoom:false});
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {crossOrigin:'anonymous'}).addTo(map);
+    map.setView([geo.lat, geo.lon], 16);
+    L.circleMarker([geo.lat, geo.lon], {radius:8, fillColor:'#e74c3c', color:'#fff', weight:2, fillOpacity:1}).addTo(map);
+
+    // 타일 로딩 후 캡처
+    setTimeout(async () => {
+      try {
+        const box = document.getElementById(`mapbox_${i}`);
+        if(!box) return;
+        const canvas = await html2canvas(box, {useCORS:true, allowTaint:false, logging:false});
+        const img = canvas.toDataURL('image/jpeg', 0.9);
+        buildings[i].mapCapture = img;
+        map.remove();
+        el.innerHTML = `<img src="${img}" style="width:100%;height:100%;object-fit:cover">`;
+        if(st) st.textContent = '✅ 캡처됨';
+        if(geoTotal > 0) updateGeoProgress(false);
+      } catch(e) {
+        if(st) st.textContent = '⚠️ 캡처실패';
+      }
+    }, 2500);
+  } catch(e) {
+    if(st) st.textContent = '❌ 오류';
+  }
+}
+
+// 개별 지도 수동 재캡처 (클릭 시)
+async function capturePreviewMap(i) {
+  buildings[i].mapCapture = null;
+  await initPreviewMap(i);
 }
 
 // ═══ 지도 캡처 ═══
@@ -699,7 +943,7 @@ async function captureMap(lat, lon) {
     layer.on('tileloadstart',()=>tTotal++);
     layer.on('tileload',()=>{ tLoaded++; if(tLoaded>=tTotal&&tTotal>0) doCapture(); });
     layer.addTo(map);
-    map.setView([lat,lon],16);
+    map.setView([lat,lon], parseInt(document.getElementById('cfgZoom')?.value||16));
     L.circleMarker([lat,lon],{radius:12,fillColor:'#e74c3c',color:'#fff',weight:3,fillOpacity:1}).addTo(map);
     function doCapture(){ if(done)return; done=true;
       setTimeout(async()=>{
@@ -846,283 +1090,4 @@ async function addBldSlide(pptx, b, num, total) {
     [cell('기준층'), cell(b.netArea,false)],
     [cell('전용율'), cell(b.ratio,false)],
     [cell('승강기'), cell(b.elevator,false)],
-    [cell('주차'),   cell(b.parking,false)],
-  ],{x:3.052,y:1.368,w:3.304,h:2.55,rowH:.283,border:{pt:.5,color:'BFBFBF'},colW:[.85,2.454]});
-
-  // ── 건물 위치 (지도)
-  slide.addShape('rect',{x:6.841,y:1.163,w:.107,h:.204,fill:{color:'BFBFBF'}});
-  slide.addText('건물 위치',{x:6.902,y:1.122,w:1.5,h:.286,fontSize:11,bold:true,color:'002060',fontFace:f});
-  slide.addShape('rect',{x:6.851,y:1.507,w:2.757,h:2.241,fill:{color:'E8EEF8'}});
-  let mapData=null;
-  if(withMap && (b.lat || b.address)){
-    showOv(true,`지도 캡처 (${num}/${total})`,b.name);
-    let geo = null;
-    // 최우선: DB에 위도/경도 직접 입력된 경우
-    if(b.lat && b.lon) {
-      geo = {lat: b.lat, lon: b.lon, src:'db'};
-    } else {
-      // 빌딩명 우선 → 주소 폴백
-      geo = await geocode(b.address, b.name);
-    }
-    if(geo) mapData = await captureMap(geo.lat, geo.lon);
-  }
-  if(mapData){
-    try{ slide.addImage({data:mapData,x:6.851,y:1.507,w:2.757,h:2.241,sizing:{type:'cover',w:2.757,h:2.241}}); }catch(e){}
-  } else {
-    slide.addText(withMap?'🗺️ 지도 없음':'🗺️ 지도 생략됨\n(설정에서 활성화 가능)',{x:6.851,y:1.507,w:2.757,h:2.241,fontSize:10,color:'AABBCC',align:'center',valign:'middle'});
-  }
-
-  // ── 기준층 도면
-  slide.addShape('rect',{x:6.828,y:4.035,w:.107,h:.204,fill:{color:'BFBFBF'}});
-  slide.addText('기준층 도면',{x:6.889,y:3.983,w:1.5,h:.286,fontSize:11,bold:true,color:'002060',fontFace:f});
-  slide.addShape('rect',{x:6.851,y:4.357,w:2.757,h:2.28,fill:{color:'FAFAFA'},line:{color:'E8E8E8',pt:.5}});
-  const fd = getFloor(b);
-  if(fd){
-    try{ slide.addImage({data:fd,x:6.851,y:4.357,w:2.757,h:2.28,sizing:{type:'contain',w:2.757,h:2.28}}); }catch(e){}
-  } else {
-    slide.addText('도면 없음',{x:6.851,y:4.357,w:2.757,h:2.28,fontSize:9,color:'CCCCCC',align:'center',valign:'middle'});
-  }
-
-  // ── 공실현황
-  slide.addShape('rect',{x:.372,y:4.043,w:.107,h:.204,fill:{color:'BFBFBF'}});
-  slide.addText('공실현황 / 임대료',{x:.434,y:4.002,w:2.2,h:.286,fontSize:11,bold:true,color:'002060'});
-  slide.addText('단위:원/ 3.3㎡',{x:4.5,y:4.168,w:2.0,h:.236,fontSize:8,color:'888888',align:'right'});
-
-  const vac=(vacancies[b.code]||[]).slice(0,7);
-  const {font:f2, size:sz2} = getCfg();
-  const hdrRow=[
-    vcell('층'), vcell('전용면적\n(평)'), vcell('임대면적\n(평)'),
-    vcell('보증금\n(원/평)'), vcell('임대료\n(원/평)'), vcell('관리비\n(원/평)'), vcell('입주시기')
-  ];
-
-  if(vac.length === 0) {
-    // 공실 없음: 헤더 + "공실 없음" 텍스트
-    const emptyRows = Array.from({length:7}, (_,ri) => {
-      const bg = ri%2===1?'F8F8F8':'FFFFFF';
-      return Array(7).fill(dcell('', bg, 'center'));
-    });
-    slide.addTable([hdrRow,...emptyRows],{
-      x:.369,y:4.404,w:6.154,h:2.187,
-      rowH:.273, border:{pt:.5,color:'BFBFBF'},
-      colW:[.60,.85,.85,1.05,1.05,1.00,.754]
-    });
-    slide.addText('공실 없음',{
-      x:.369, y:4.677, w:6.154, h:1.64,
-      fontSize:18, bold:true, color:'AAAAAA',
-      align:'center', valign:'middle', fontFace:f2
-    });
-  } else {
-    const dataRows = Array.from({length:7},(_,ri)=>{
-      const v=vac[ri];
-      const bg = ri%2===1?'F8F8F8':'FFFFFF';
-      return v ? [
-        dcell(v.floor,bg,'center'), dcell(v.net,bg,'center'), dcell(v.lease,bg,'center'),
-        dcell(v.dep,bg,'right'), dcell(v.rent,bg,'right'), dcell(v.mgmt,bg,'right'), dcell(v.move,bg,'center')
-      ] : Array(7).fill(dcell('',bg,'center'));
-    });
-    slide.addTable([hdrRow,...dataRows],{
-      x:.369,y:4.404,w:6.154,h:2.187,
-      rowH:.273, border:{pt:.5,color:'BFBFBF'},
-      colW:[.60,.85,.85,1.05,1.05,1.00,.754]
-    });
-  }
-
-  addFooter(slide, num, total);
-}
-
-function cell(txt,isKey=true) {
-  const f=getCfg().font, sz=getCfg().size;
-  return {text:String(txt), options:isKey
-    ? {bold:true,color:'555577',fontSize:sz,fill:{color:'F5F5F8'},align:'center',valign:'middle',fontFace:f}
-    : {fontSize:sz,color:'1a1a2e',valign:'middle',wrap:true,fontFace:f}};
-}
-function vcell(txt) {
-  const f=getCfg().font, sz=getCfg().size;
-  return {text:txt, options:{bold:true,color:'FFFFFF',fill:{color:'002060'},align:'center',valign:'middle',fontSize:sz,fontFace:f}};
-}
-function dcell(txt,bg,align) {
-  const f=getCfg().font, sz=getCfg().size;
-  return {text:String(txt), options:{fontSize:sz,align,fill:{color:bg},valign:'middle',fontFace:f}};
-}
-function noImg(slide,x,y,w,h,msg) {
-  slide.addShape('rect',{x,y,w,h,fill:{color:'EEEEEE'}});
-  slide.addText(msg,{x,y,w,h,fontSize:10,color:'BBBBBB',align:'center',valign:'middle'});
-}
-
-// ═══ 이미지 관리 모달 ═══
-let mgrTab = 'ph'; // 'ph' or 'fl'
-
-function openImgMgr() {
-  document.getElementById('imgMgrModal').style.display = 'flex';
-  switchTab('ph');
-}
-function closeImgMgr() {
-  document.getElementById('imgMgrModal').style.display = 'none';
-  refreshMatch();
-}
-
-function switchTab(tab) {
-  mgrTab = tab;
-  document.getElementById('tabPh').style.cssText = tab==='ph'
-    ? 'padding:10px 18px;border:none;background:none;font-weight:700;font-size:12px;cursor:pointer;border-bottom:2px solid #002060;color:#002060;margin-bottom:-2px'
-    : 'padding:10px 18px;border:none;background:none;font-weight:700;font-size:12px;cursor:pointer;border-bottom:2px solid transparent;color:#888;margin-bottom:-2px';
-  document.getElementById('tabFl').style.cssText = tab==='fl'
-    ? 'padding:10px 18px;border:none;background:none;font-weight:700;font-size:12px;cursor:pointer;border-bottom:2px solid #002060;color:#002060;margin-bottom:-2px'
-    : 'padding:10px 18px;border:none;background:none;font-weight:700;font-size:12px;cursor:pointer;border-bottom:2px solid transparent;color:#888;margin-bottom:-2px';
-  renderImgMgr();
-}
-
-function renderImgMgr() {
-  const store = mgrTab === 'ph' ? photos : floors;
-  const search = (document.getElementById('imgSearch').value||'').toLowerCase();
-  const keys = Object.keys(store).filter(k => !search || k.includes(search));
-  const grid = document.getElementById('imgMgrGrid');
-
-  document.getElementById('phCnt').textContent = Object.keys(photos).length;
-  document.getElementById('flCnt').textContent = Object.keys(floors).length;
-  document.getElementById('imgMgrFooter').textContent = `${keys.length}개 표시 중 (전체 ${Object.keys(store).length}개)`;
-
-  if(!keys.length) {
-    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:#ccc;padding:40px;font-size:13px">
-      ${search ? '검색 결과가 없습니다' : '업로드된 이미지가 없습니다'}</div>`;
-    return;
-  }
-
-  grid.innerHTML = keys.map(k => `
-    <div style="border:1px solid #e8e8e8;border-radius:8px;overflow:hidden;position:relative;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.06)">
-      <div style="height:100px;background:#f5f5f5;display:flex;align-items:center;justify-content:center;overflow:hidden">
-        <img src="${store[k]}" style="max-width:100%;max-height:100%;object-fit:contain">
-      </div>
-      <div style="padding:6px 8px">
-        <div style="font-size:10px;font-weight:700;color:#333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${k}">${k}</div>
-        <div style="display:flex;gap:4px;margin-top:5px">
-          <label style="flex:1;background:#f0f4ff;border:1px solid #c8d8f8;border-radius:4px;padding:3px 0;text-align:center;font-size:10px;color:#2c4a8a;cursor:pointer;font-weight:700">
-            🔄 교체
-            <input type="file" accept="image/*" style="display:none" onchange="replaceImg('${k}', this)">
-          </label>
-          <button onclick="deleteImg('${k}')" style="flex:1;background:#fff0f0;border:1px solid #ffcdd2;border-radius:4px;padding:3px 0;font-size:10px;color:#e53935;cursor:pointer;font-weight:700">🗑 삭제</button>
-        </div>
-      </div>
-    </div>
-  `).join('');
-}
-
-function deleteImg(key) {
-  if(!confirm(`"${key}" 이미지를 삭제하시겠습니까?`)) return;
-  const store = mgrTab === 'ph' ? photos : floors;
-  delete store[key];
-  renderImgMgr();
-  refreshImgStat();
-  const pc = Object.keys(photos).length, fc = Object.keys(floors).length;
-  if(!pc && !fc) document.getElementById('imgMgrBtn').style.display = 'none';
-}
-
-function replaceImg(key, input) {
-  const file = input.files[0]; if(!file) return;
-  const reader = new FileReader();
-  reader.onload = evt => {
-    const store = mgrTab === 'ph' ? photos : floors;
-    store[key] = evt.target.result;
-    renderImgMgr();
-    refreshMatch();
-  };
-  reader.readAsDataURL(file);
-}
-
-function clearAllImgs() {
-  const label = mgrTab === 'ph' ? '대표사진' : '도면';
-  const store = mgrTab === 'ph' ? photos : floors;
-  const n = Object.keys(store).length;
-  if(!n) return;
-  if(!confirm(`${label} ${n}개를 모두 삭제하시겠습니까?`)) return;
-  if(mgrTab === 'ph') { for(const k in photos) delete photos[k]; }
-  else { for(const k in floors) delete floors[k]; }
-  renderImgMgr();
-  refreshImgStat();
-}
-
-function mgrAddFiles(input) {
-  const files = Array.from(input.files); if(!files.length) return;
-  const store = mgrTab === 'ph' ? photos : floors;
-  let done = 0;
-  files.forEach(f => {
-    const reader = new FileReader();
-    reader.onload = evt => {
-      store[f.name.replace(/\.[^.]+$/,'').toLowerCase()] = evt.target.result;
-      if(++done === files.length) { renderImgMgr(); refreshImgStat(); refreshMatch(); }
-    };
-    reader.readAsDataURL(f);
-  });
-  input.value = '';
-}
-
-function showOv(show,main,sub){
-  document.getElementById('ov').classList.toggle('show',show);
-  if(main!==undefined) document.getElementById('ot').textContent=main;
-  if(sub!==undefined) document.getElementById('os').textContent=sub;
-}
-function dateStr(){
-  const d=new Date();
-  return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
-}
-
-// ═══ 설정값 ═══
-function getCfg() {
-  return {
-    font: document.getElementById('cfgFont').value,
-    size: parseInt(document.getElementById('cfgSize').value),
-    withMap: document.getElementById('cfgMap').checked
-  };
-}
-
-// 지도 옵션 변경 시 라벨 업데이트
-document.getElementById('cfgMap').addEventListener('change', function() {
-  document.getElementById('cfgMapLbl').textContent = this.checked
-    ? '포함 (건물당 약 5초 소요)' : '생략 (빠른 생성)';
-});
-
-// 선택 수 변경 시 성능 경고
-// ═══ 섹션 접기/펼치기 ═══
-function toggleSec(id) {
-  const body = document.getElementById(id);
-  const arrow = document.getElementById(id+'-arrow');
-  const isOpen = body.classList.contains('open');
-  body.classList.toggle('open', !isOpen);
-  if(arrow) arrow.textContent = isOpen ? '▶' : '▼';
-}
-
-function collapseSec(id, doneText) {
-  const body = document.getElementById(id);
-  const arrow = document.getElementById(id+'-arrow');
-  const done = document.getElementById(id+'-done');
-  body.classList.remove('open');
-  if(arrow) arrow.textContent = '▶';
-  if(done) { done.textContent = '✅ ' + doneText; done.classList.add('show'); }
-}
-
-function updateKakaoStatus() {
-  const key = document.getElementById('cfgKakaoKey')?.value?.trim();
-  const el = document.getElementById('kakaoStatus');
-  if(!el) return;
-  el.textContent = key ? '✅' : '⚠️';
-  el.title = key ? 'Kakao API 키 설정됨' : 'API 키 없음 - OpenStreetMap 사용';
-}
-
-function updatePerfWarn() {
-  const n = buildings.filter(b=>b.selected).length;
-  const withMap = document.getElementById('cfgMap').checked;
-  const warn = document.getElementById('perfWarn');
-  if(n >= 50 && withMap) {
-    const mins = Math.round(n * 5 / 60);
-    warn.style.display = 'block';
-    warn.innerHTML = `⚠️ <strong>${n}개 건물 + 지도 포함</strong> → 예상 소요 약 <strong>${mins}분</strong><br>빠른 생성이 필요하면 위 "지도 포함"을 해제하세요.`;
-  } else if(n >= 200) {
-    warn.style.display = 'block';
-    warn.innerHTML = `⚠️ <strong>${n}개 건물</strong> — 이미지가 많으면 브라우저 메모리 부족이 발생할 수 있습니다. <strong>100개씩 나눠서</strong> 생성하는 것을 권장합니다.`;
-  } else {
-    warn.style.display = 'none';
-  }
-}
-</script>
-</body>
-</html>
+    [cell('주차'),   cell(b.parkin
