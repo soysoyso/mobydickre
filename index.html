@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<title>MOBYDICK RE · 부동산 PPT 생성기</title>
+<title>MOBYDICK RE · 부동산 PPT 생성기 v1.1</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
@@ -1029,17 +1029,17 @@ async function genPPT() {
 
 function addHdr(slide, title, num, total) {
   const f = getCfg().font;
-  // 헤더 스트립: bg1×95% = #F2F2F2 (실제 템플릿 색상)
+  // 헤더 스트립
   slide.addShape('rect',{x:.369,y:.183,w:9.255,h:.708,fill:{color:'F2F2F2'}});
-  // GBD 포인트 박스: #002060
-  slide.addShape('rect',{x:.375,y:.183,w:.74,h:.697,fill:{color:'002060'}});
-  slide.addText('GBD',{x:.342,y:.183,w:.88,h:.697,fontSize:20,bold:true,color:'FFFFFF',align:'center',valign:'middle',fontFace:f});
-  // 건물명: #002060 on light strip
-  slide.addText(title,{x:1.073,y:.495,w:5.5,h:.404,fontSize:13,bold:true,color:'002060',valign:'middle',fontFace:f});
-  // MOBYDICK RE: #002060
-  slide.addText('MOBYDICK RE',{x:7.664,y:.487,w:2.095,h:.404,fontSize:10,color:'002060',align:'right',valign:'middle',fontFace:f});
-  // 구분선: accent1×75% = #2F5496
-  slide.addShape('line',{x:.369,y:.885,w:9.255,h:0,line:{color:'2F5496',width:.75}});
+  // GBD 박스
+  slide.addShape('rect',{x:.375,y:.183,w:.74,h:.708,fill:{color:'002060'}});
+  slide.addText('GBD',{x:.342,y:.183,w:.88,h:.708,fontSize:20,bold:true,color:'FFFFFF',align:'center',valign:'middle',fontFace:f});
+  // 건물명 (16pt, 헤더 전체 높이 → 수직 중앙)
+  slide.addText(title,{x:1.10,y:.183,w:5.8,h:.708,fontSize:16,bold:true,color:'002060',valign:'middle',fontFace:f});
+  // MOBYDICK RE (14pt bold, 우측)
+  slide.addText('MOBYDICK RE',{x:6.924,y:.183,w:2.7,h:.708,fontSize:14,bold:true,color:'002060',align:'right',valign:'middle',fontFace:f});
+  // 구분선
+  slide.addShape('line',{x:.369,y:.891,w:9.255,h:0,line:{color:'2F5496',width:.75}});
 }
 
 function getContacts() {
@@ -1185,48 +1185,80 @@ async function addBldSlide(pptx, b, num, total) {
     slide.addText('도면 없음',{x:6.851,y:4.357,w:2.757,h:2.28,fontSize:9,color:'CCCCCC',align:'center',valign:'middle'});
   }
 
-  // ── 공실현황
+  // ── 공실현황 (v1.1: 연속 층 자동 병합)
   slide.addShape('rect',{x:.372,y:4.043,w:.107,h:.204,fill:{color:'BFBFBF'}});
   slide.addText('공실현황 / 임대료',{x:.434,y:4.002,w:2.2,h:.286,fontSize:11,bold:true,color:'002060'});
   slide.addText('단위:원/ 3.3㎡',{x:4.5,y:4.168,w:2.0,h:.236,fontSize:8,color:'888888',align:'right'});
 
-  const vac=(vacancies[b.code]||[]).slice(0,7);
-  const {font:f2, size:sz2} = getCfg();
-  const hdrRow=[
+  const rawVac  = vacancies[b.code] || [];
+  const mrgVac  = mergeVacancyRows(rawVac);   // 병합 적용
+  const {font:f2} = getCfg();
+  const hdrRow  = [
     vcell('층'), vcell('전용면적\n(평)'), vcell('임대면적\n(평)'),
     vcell('보증금\n(원/평)'), vcell('임대료\n(원/평)'), vcell('관리비\n(원/평)'), vcell('입주시기')
   ];
 
-  if(vac.length === 0) {
-    // 공실 없음: 헤더 + "공실 없음" 텍스트
-    const emptyRows = Array.from({length:7}, (_,ri) => {
-      const bg = ri%2===1?'F8F8F8':'FFFFFF';
-      return Array(7).fill(dcell('', bg, 'center'));
-    });
-    slide.addTable([hdrRow,...emptyRows],{
-      x:.369,y:4.404,w:6.154,h:2.187,
-      rowH:.273, border:{pt:.5,color:'BFBFBF'},
-      colW:[.60,.85,.85,1.05,1.05,1.00,.754]
-    });
-    slide.addText('공실 없음',{
-      x:.369, y:4.677, w:6.154, h:1.64,
-      fontSize:18, bold:true, color:'AAAAAA',
-      align:'center', valign:'middle', fontFace:f2
-    });
-  } else {
-    const dataRows = Array.from({length:7},(_,ri)=>{
-      const v=vac[ri];
+  function buildVacRows(rows, rowH, compact) {
+    const n = compact ? rows.length : 7;
+    return Array.from({length: n}, (_, ri) => {
+      const v = rows[ri];
       const bg = ri%2===1?'F8F8F8':'FFFFFF';
       return v ? [
         dcell(v.floor,bg,'center'), dcell(v.net,bg,'center'), dcell(v.lease,bg,'center'),
         dcell(v.dep,bg,'right'), dcell(v.rent,bg,'right'), dcell(v.mgmt,bg,'right'), dcell(v.move,bg,'center')
       ] : Array(7).fill(dcell('',bg,'center'));
     });
-    slide.addTable([hdrRow,...dataRows],{
+  }
+
+  if (mrgVac.length === 0) {
+    const emptyRows = Array.from({length:7}, (_,ri) => {
+      return Array(7).fill(dcell('', ri%2===1?'F8F8F8':'FFFFFF', 'center'));
+    });
+    slide.addTable([hdrRow,...emptyRows],{
       x:.369,y:4.404,w:6.154,h:2.187,
       rowH:.273, border:{pt:.5,color:'BFBFBF'},
       colW:[.60,.85,.85,1.05,1.05,1.00,.754]
     });
+    slide.addText('공실 없음',{x:.369,y:4.677,w:6.154,h:1.64,
+      fontSize:18,bold:true,color:'333333',align:'center',valign:'middle',fontFace:f2});
+
+  } else {
+    const p   = vacLayoutParams(mrgVac.length);
+    const MAX = p.maxPerPage;
+    const firstChunk = mrgVac.slice(0, MAX);
+    const dataRows   = buildVacRows(firstChunk, p.rowH, p.compact);
+    const tableH     = Math.min(p.rowH * (dataRows.length + 1), 2.187);
+
+    slide.addTable([hdrRow,...dataRows],{
+      x:.369,y:4.404,w:6.154,h:tableH,
+      rowH:p.rowH, border:{pt:.5,color:'BFBFBF'},
+      colW:[.60,.85,.85,1.05,1.05,1.00,.754]
+    });
+
+    // 병합 메모 (원본 행 수 > 병합 행 수일 때만)
+    if (rawVac.length > mrgVac.length) {
+      slide.addText(`* @ 표시 = 층범위 병합 (${rawVac.length}행 → ${mrgVac.length}행)`,{
+        x:.369,y:6.60,w:6.154,h:.18,fontSize:7,color:'AAAAAA',align:'right'
+      });
+    }
+
+    // 초과 행 → 추가 슬라이드
+    for (let si = MAX; si < mrgVac.length; si += MAX) {
+      const chunk = mrgVac.slice(si, si + MAX);
+      const xs    = pptx.addSlide();
+      xs.background = {color:'FFFFFF'};
+      addHdr(xs, b.name, num, total);
+      xs.addShape('rect',{x:.372,y:1.043,w:.107,h:.204,fill:{color:'BFBFBF'}});
+      xs.addText('공실현황 / 임대료 (계속)',{x:.434,y:1.002,w:3.0,h:.286,fontSize:11,bold:true,color:'002060'});
+      xs.addText('단위:원/ 3.3㎡',{x:4.5,y:1.168,w:2.0,h:.236,fontSize:8,color:'888888',align:'right'});
+      const xRows = buildVacRows(chunk, p.rowH, true);
+      xs.addTable([hdrRow,...xRows],{
+        x:.369,y:1.4,w:6.154,h:p.rowH*(xRows.length+1),
+        rowH:p.rowH, border:{pt:.5,color:'BFBFBF'},
+        colW:[.60,.85,.85,1.05,1.05,1.00,.754]
+      });
+      addFooter(xs, num, total);
+    }
   }
 
   addFooter(slide, num, total);
@@ -1238,6 +1270,51 @@ function cell(txt,isKey=true) {
     ? {bold:true,color:'555577',fontSize:sz,fill:{color:'F5F5F8'},align:'center',valign:'middle',fontFace:f}
     : {fontSize:sz,color:'1a1a2e',valign:'middle',wrap:true,fontFace:f}};
 }
+
+// ═══ v1.1: 연속 층 병합 ═══
+function mergeVacancyRows(vac) {
+  if (!vac || !vac.length) return [];
+  function toFloorNum(f) {
+    const m = String(f).match(/(\d+)/);
+    return m ? parseInt(m[1]) : NaN;
+  }
+  const merged = [];
+  let group = null;
+  for (const v of vac) {
+    const fn = toFloorNum(v.floor);
+    const key = `${v.net}|${v.lease}|${v.dep}|${v.rent}|${v.mgmt}|${v.move}`;
+    if (group && group.key === key && !isNaN(fn) && !isNaN(group.lastFn) && Math.abs(fn - group.lastFn) === 1) {
+      group.floors.push(fn);
+      group.lastFn = fn;
+    } else {
+      if (group) merged.push(group);
+      group = { key, floors: isNaN(fn) ? [] : [fn], lastFn: fn, raw: v };
+    }
+  }
+  if (group) merged.push(group);
+  return merged.map(g => {
+    let floorLabel;
+    if (!g.floors.length) {
+      floorLabel = g.raw.floor;
+    } else {
+      const mn = Math.min(...g.floors), mx = Math.max(...g.floors);
+      floorLabel = mn === mx ? `${mn}F` : `${mn}~${mx}F`;
+    }
+    const isRange = g.floors.length > 1;
+    return { ...g.raw, floor: floorLabel,
+      net:   isRange ? `@${g.raw.net}`   : g.raw.net,
+      lease: isRange ? `@${g.raw.lease}` : g.raw.lease,
+      _merged: g.floors.length || 1 };
+  });
+}
+
+// 행 수에 따른 레이아웃 파라미터
+function vacLayoutParams(n) {
+  if (n <= 8)  return { rowH: 0.273, compact: false, maxPerPage: 8  };
+  if (n <= 14) return { rowH: 0.200, compact: true,  maxPerPage: 14 };
+  return              { rowH: 0.175, compact: true,  maxPerPage: 16 };
+}
+
 function vcell(txt) {
   const f=getCfg().font, sz=getCfg().size;
   return {text:txt, options:{bold:true,color:'FFFFFF',fill:{color:'002060'},align:'center',valign:'middle',fontSize:sz,fontFace:f}};
