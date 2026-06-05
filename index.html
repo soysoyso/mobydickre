@@ -1,0 +1,1128 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>MOBYDICK RE · 부동산 PPT 생성기</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f0f2f5;color:#1a1a2e;font-size:13px}
+.hdr{background:#002060;color:#fff;padding:14px 28px;display:flex;align-items:center;gap:12px;box-shadow:0 2px 10px rgba(0,0,0,.4)}
+.hdr h1{font-size:16px;font-weight:700;letter-spacing:-.3px}
+.hdr p{font-size:11px;opacity:.55;margin-top:2px}
+.layout{display:flex;height:calc(100vh - 58px)}
+.sidebar{width:300px;min-width:300px;background:#fff;border-right:1px solid #e8e8e8;display:flex;flex-direction:column;overflow:hidden}
+.sb-top{overflow-y:auto;flex-shrink:0;max-height:60vh}
+.sb-sec{border-bottom:1px solid #f0f0f0}
+.sb-sec-hdr{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;cursor:pointer;user-select:none;background:#fafafa}
+.sb-sec-hdr:hover{background:#f0f4ff}
+.sb-sec-hdr h3{font-size:10px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.4px;margin:0}
+.sb-sec-hdr .toggle{font-size:10px;color:#aaa}
+.sb-sec-body{padding:10px 14px 12px;display:none}
+.sb-sec-body.open{display:block}
+.sb-sec-done{padding:7px 14px;font-size:11px;color:#27ae60;font-weight:600;display:none;align-items:center;gap:6px}
+.sb-sec-done.show{display:flex}
+.dz{border:2px dashed #ddd;border-radius:8px;padding:12px;text-align:center;cursor:pointer;background:#fafafa;transition:.2s}
+.dz:hover{border-color:#4472C4;background:#f0f4ff}
+.dz.done{border:2px solid #27ae60;background:#f0fff4}
+.dz .ico{font-size:20px;margin-bottom:4px}
+.dz p{font-size:11px;color:#888;line-height:1.5}
+.dz input{display:none}
+.img-row{display:flex;gap:8px}
+.img-row .dz{flex:1}
+.hint{background:#fffbf0;border:1px solid #ffe082;border-radius:6px;padding:8px 10px;font-size:10px;color:#7a5c00;line-height:1.7;margin-top:8px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:7px 13px;border-radius:7px;border:none;font-size:12px;font-weight:700;cursor:pointer;transition:.15s;font-family:inherit}
+.btn-dark{background:#002060;color:#fff}.btn-dark:hover{background:#003087}
+.btn-dark:disabled{background:#bbb;cursor:not-allowed}
+.btn-green{background:#27ae60;color:#fff}.btn-green:hover{background:#219a52}
+.btn-green:disabled{background:#bbb;cursor:not-allowed}
+.btn-out{background:#fff;color:#444;border:1.5px solid #ddd}.btn-out:hover{background:#f5f5f5}
+.btn-full{width:100%}
+.btn-sm{padding:4px 9px;font-size:11px}
+.sel-bar{display:none;align-items:center;gap:5px;padding:5px 10px;border-bottom:1px solid #f0f0f0;flex-shrink:0;background:#f8f8fb;border-top:2px solid #e0e0e0}
+.sel-bar span{font-size:10px;color:#888;margin-left:auto}
+.blist{flex:1;overflow-y:auto;min-height:0}
+.bi{display:flex;align-items:center;gap:7px;padding:5px 10px;border-bottom:1px solid #f5f5f5;cursor:pointer;transition:.1s;user-select:none}
+.bi:hover{background:#f3f6ff}
+.bi.on{background:#eef2ff}
+.bi input[type=checkbox]{width:13px;height:13px;accent-color:#002060;flex-shrink:0}
+.bi-idx{font-size:10px;color:#bbb;width:22px;text-align:right;flex-shrink:0;font-variant-numeric:tabular-nums}
+.binfo{flex:1;min-width:0}
+.bname{font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#1a1a2e}
+.bsub{font-size:9px;color:#bbb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.main{flex:1;overflow-y:auto;padding:22px;padding-bottom:90px}
+.welcome{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#bbb}
+.welcome .big{font-size:54px;margin-bottom:14px}
+.welcome h2{font-size:20px;color:#666;margin-bottom:10px}
+.welcome p{font-size:13px;line-height:2}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:16px}
+.pcard{background:#fff;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.07);overflow:hidden;border:2px solid transparent;transition:.15s}
+.pcard.on{border-color:#4472C4}
+.pcard-head{background:#002060;color:#fff;padding:11px 14px;display:flex;justify-content:space-between;align-items:center}
+.pcard-head h4{font-size:13px;font-weight:700}
+.pcard-head .num{background:rgba(255,255,255,.15);padding:2px 7px;border-radius:20px;font-size:10px}
+.pcard-body{display:grid;grid-template-columns:1fr 1fr}
+.pcl{padding:12px;border-right:1px solid #f0f0f0}
+.pcr{padding:12px}
+.photo-box{width:100%;height:110px;border-radius:5px;background:#f0f0f0;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:8px}
+.photo-box img{width:100%;height:100%;object-fit:cover}
+.itbl{width:100%;border-collapse:collapse;font-size:10px}
+.itbl td{padding:3px 0;vertical-align:top}
+.itbl td:first-child{color:#999;width:48px}
+.itbl td:last-child{color:#333;font-weight:600}
+.map-box{width:100%;height:120px;border-radius:5px;background:#e8effd;overflow:hidden;margin-bottom:7px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#aaa;flex-direction:column;gap:3px}
+.floor-box{width:100%;height:65px;border-radius:5px;background:#f9f9f9;border:1px solid #eee;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.floor-box img{max-width:100%;max-height:100%;object-fit:contain}
+.floor-box span{font-size:10px;color:#ccc}
+.fn-row{display:flex;gap:6px;padding:8px 12px;border-top:1px solid #f0f0f0;background:#fafbff}
+.fn-inp{flex:1;display:flex;flex-direction:column;gap:3px}
+.fn-inp label{font-size:9px;color:#999;font-weight:700;text-transform:uppercase}
+.fn-inp input{border:1px solid #e0e0e0;border-radius:4px;padding:4px 7px;font-size:11px;width:100%;font-family:inherit;color:#333}
+.fn-inp input:focus{outline:none;border-color:#4472C4}
+.fn-inp input.matched{border-color:#27ae60;background:#f0fff4}
+.vac-box{padding:8px 12px;border-top:1px solid #f0f0f0}
+.vac-box .vlbl{font-size:10px;font-weight:700;color:#555;margin-bottom:5px}
+.vtbl{width:100%;border-collapse:collapse;font-size:9px}
+.vtbl th{background:#002060;color:#fff;padding:3px 4px;text-align:center;font-weight:700}
+.vtbl td{padding:2px 4px;text-align:center;border-bottom:1px solid #f0f0f0;color:#444}
+.vtbl tr:nth-child(even) td{background:#f8f8f8}
+.abar{display:none;position:fixed;bottom:0;left:330px;right:0;background:#fff;border-top:1px solid #e8e8e8;padding:11px 22px;align-items:center;gap:14px;box-shadow:0 -4px 16px rgba(0,0,0,.07);z-index:100}
+.abar .cinfo{font-size:13px;color:#555}
+.abar .cinfo strong{color:#002060;font-size:16px}
+.ov{display:none;position:fixed;inset:0;background:rgba(0,6,30,.88);z-index:999;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+.ov.show{display:flex}
+.sp{width:42px;height:42px;border:4px solid rgba(255,255,255,.15);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ot{color:#fff;font-size:16px;font-weight:700}
+.os{color:rgba(255,255,255,.5);font-size:12px}
+#hmap{position:fixed;left:-9999px;top:-9999px;width:700px;height:450px;z-index:-1}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <span style="font-size:22px">🏢</span>
+  <div style="flex:1">
+    <h1>MOBYDICK RE · 부동산 PPT 보고서 생성기</h1>
+  </div>
+  <button onclick="document.getElementById('infoModal').style.display='flex'"
+    style="background:rgba(255,255,255,.15);border:none;color:#fff;width:30px;height:30px;border-radius:50%;font-size:15px;cursor:pointer;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0"
+    title="사용 안내">?</button>
+</div>
+
+<!-- 사용 안내 팝업 -->
+<div id="infoModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:997;align-items:center;justify-content:center" onclick="if(event.target===this)this.style.display='none'">
+  <div style="background:#fff;border-radius:12px;width:480px;max-width:92vw;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,.3)">
+    <div style="background:#002060;color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:15px;font-weight:700">📋 사용 안내</span>
+      <button onclick="document.getElementById('infoModal').style.display='none'" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:12px">닫기</button>
+    </div>
+    <div style="padding:20px;font-size:12px;line-height:2;color:#333">
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="background:#f0f4ff;border-radius:8px;padding:10px 14px">
+          <strong style="color:#002060">① DB 엑셀 업로드</strong><br>
+          B_DB 시트(건물 기본정보) + 공실 시트(공실현황)를 자동 인식합니다.<br>
+          <span style="color:#888;font-size:11px">빌딩코드로 두 시트가 자동 연동됩니다.</span>
+        </div>
+        <div style="background:#f0fff4;border-radius:8px;padding:10px 14px">
+          <strong style="color:#1a7a3c">② 이미지 업로드</strong><br>
+          대표사진·도면을 각각 업로드 후, 건물 카드 하단 입력창에 <strong>확장자 없이 파일명</strong>을 입력하세요.<br>
+          <span style="color:#888;font-size:11px">입력창이 초록색이면 매칭 성공. 기본값은 건물명으로 자동 입력됩니다.</span>
+        </div>
+        <div style="background:#fffbf0;border-radius:8px;padding:10px 14px">
+          <strong style="color:#7a5c00">③ 건물 선택</strong><br>
+          좌측 목록에서 원하는 건물만 체크하세요. 전체선택/해제 버튼도 제공됩니다.
+        </div>
+        <div style="background:#fff0f4;border-radius:8px;padding:10px 14px">
+          <strong style="color:#c0002a">④ PPT 생성</strong><br>
+          하단 <strong>"PPT 생성"</strong> 버튼 클릭 → 목록 슬라이드 + 건물별 슬라이드 자동 생성.<br>
+          <span style="color:#888;font-size:11px">목록 슬라이드에서 건물명 클릭 시 해당 슬라이드로 이동합니다.</span>
+        </div>
+        <div style="background:#f5f5f5;border-radius:8px;padding:10px 14px;font-size:11px;color:#666">
+          💡 <strong>성능 팁</strong>: 50개 이상 + 지도 포함 시 오래 걸립니다. PPT 설정에서 지도를 생략하면 빠르게 생성됩니다.
+          200개 이상은 100개씩 나눠서 생성을 권장합니다.
+        </div>
+        <div style="background:#f0f4ff;border-radius:8px;padding:10px 14px;margin-top:4px">
+          <strong style="color:#002060;font-size:12px">🗺 Kakao 지도 API 키</strong>
+          <div style="font-size:11px;color:#555;margin:6px 0 8px">주소 정확도를 높이려면 Kakao REST API 키를 입력하세요.<br>
+          <a href="https://developers.kakao.com" target="_blank" style="color:#4472C4">developers.kakao.com</a> → 앱 → 일반 → REST API 키</div>
+          <div style="position:relative">
+            <input type="password" id="cfgKakaoKey" placeholder="REST API 키 (선택사항)"
+              value="b78f07a20375268454f3d239b118877f"
+              style="width:100%;border:1px solid #c8d8f8;border-radius:6px;padding:6px 36px 6px 10px;font-size:11px;font-family:monospace;background:#fff"
+              oninput="updateKakaoStatus()">
+            <span id="kakaoStatus" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:14px" title="Kakao API 키 설정됨">✅</span>
+          </div>
+        </div>
+        <div style="background:#f5f5f5;border-radius:8px;padding:10px 14px;font-size:11px;color:#666;margin-top:4px">불필요한
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="layout">
+  <div class="sidebar">
+    <div class="sb-top">
+
+    <!-- ① 엑셀 -->
+    <div class="sb-sec">
+      <div class="sb-sec-hdr" onclick="toggleSec('sec1')">
+        <h3>① DB 엑셀</h3><span class="toggle" id="sec1-arrow">▼</span>
+      </div>
+      <div class="sb-sec-done" id="sec1-done"></div>
+      <div class="sb-sec-body open" id="sec1">
+        <div class="dz" id="exZ" onclick="document.getElementById('exI').click()">
+          <div class="ico">📊</div>
+          <p id="exLbl">DB 엑셀 파일 선택<br><small style="color:#bbb">.xlsx / .xls</small></p>
+          <input type="file" id="exI" accept=".xlsx,.xls">
+        </div>
+        <div class="hint" style="margin-top:8px">
+          빌딩명·주소·지하철역·도보·연면적·규모·준공·전용면적·임대면적·전용률 자동 인식 / "공실" 시트 연동
+        </div>
+      </div>
+    </div>
+
+    <!-- ② 이미지 -->
+    <div class="sb-sec">
+      <div class="sb-sec-hdr" onclick="toggleSec('sec2')">
+        <h3>② 이미지</h3><span class="toggle" id="sec2-arrow">▼</span>
+      </div>
+      <div class="sb-sec-done" id="sec2-done"></div>
+      <div class="sb-sec-body open" id="sec2">
+        <div class="img-row">
+          <div class="dz" id="phZ" onclick="document.getElementById('phI').click()">
+            <div class="ico">📷</div>
+            <p id="phLbl">대표사진</p>
+            <input type="file" id="phI" accept=".jpg,.jpeg,.png,.gif,.bmp,.webp,.tiff,.tif,image/*" multiple>
+          </div>
+          <div class="dz" id="flZ" onclick="document.getElementById('flI').click()">
+            <div class="ico">📐</div>
+            <p id="flLbl">도면</p>
+            <input type="file" id="flI" accept=".jpg,.jpeg,.png,.gif,.bmp,.webp,.tiff,.tif,image/*" multiple>
+          </div>
+        </div>
+        <div id="imgStat" style="font-size:10px;color:#27ae60;margin-top:5px;display:none"></div>
+        <button class="btn btn-out btn-sm btn-full" id="imgMgrBtn" onclick="openImgMgr()" style="margin-top:6px;display:none">🗂 이미지 관리 (수정/삭제)</button>
+        <div class="hint" style="margin-top:6px;font-size:9px">
+          파일명 <strong>확장자 제외</strong>로 매칭 · 권장: 대표사진 800×940px · 도면 1000×820px
+        </div>
+      </div>
+    </div>
+
+    <!-- ③ 설정 -->
+    <div class="sb-sec">
+      <div class="sb-sec-hdr" onclick="toggleSec('sec3')">
+        <h3>PPT 설정</h3><span class="toggle" id="sec3-arrow">▼</span>
+      </div>
+      <div class="sb-sec-body open" id="sec3">
+        <div style="display:flex;flex-direction:column;gap:7px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <label style="font-size:11px;color:#555;width:55px;flex-shrink:0">폰트</label>
+            <select id="cfgFont" style="flex:1;border:1px solid #ddd;border-radius:5px;padding:3px 6px;font-size:11px;font-family:inherit">
+              <option value="맑은 고딕">맑은 고딕</option>
+              <option value="나눔고딕">나눔고딕</option>
+              <option value="굴림">굴림</option>
+              <option value="돋움">돋움</option>
+              <option value="Arial">Arial</option>
+              <option value="Calibri">Calibri</option>
+            </select>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <label style="font-size:11px;color:#555;width:55px;flex-shrink:0">글자크기</label>
+            <select id="cfgSize" style="flex:1;border:1px solid #ddd;border-radius:5px;padding:3px 6px;font-size:11px;font-family:inherit">
+              <option value="8">8pt</option>
+              <option value="9" selected>9pt</option>
+              <option value="10">10pt</option>
+              <option value="11">11pt</option>
+            </select>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <label style="font-size:11px;color:#555;width:55px;flex-shrink:0">지도</label>
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px">
+              <input type="checkbox" id="cfgMap" checked style="width:13px;height:13px;accent-color:#002060">
+              <span id="cfgMapLbl">포함 (건물당 ~5초)</span>
+            </label>
+          </div>
+          <!-- 카카오 키는 ? 인포 팝업에서 관리 -->
+        </div>
+
+        <!-- 담당자 설정 -->
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid #f0f0f0">
+          <div style="font-size:10px;font-weight:700;color:#999;text-transform:uppercase;margin-bottom:7px">담당자 (푸터)</div>
+          <div style="display:flex;flex-direction:column;gap:5px" id="contactList">
+            <div class="contact-row" data-idx="0">
+              <input type="text" placeholder="이름·직책" value="양승근 이사"
+                style="width:100%;border:1px solid #e0e0e0;border-radius:4px;padding:3px 6px;font-size:10px;font-family:inherit;margin-bottom:2px">
+              <input type="text" placeholder="010-0000-0000" value="010-9248-2389"
+                style="width:48%;border:1px solid #e0e0e0;border-radius:4px;padding:3px 6px;font-size:10px;font-family:inherit">
+              <input type="text" placeholder="email@domain.com" value="skyyang@mobydickre.com"
+                style="width:51%;border:1px solid #e0e0e0;border-radius:4px;padding:3px 6px;font-size:10px;font-family:inherit">
+            </div>
+            <div class="contact-row" data-idx="1">
+              <input type="text" placeholder="이름·직책" value="김보석 과장"
+                style="width:100%;border:1px solid #e0e0e0;border-radius:4px;padding:3px 6px;font-size:10px;font-family:inherit;margin-bottom:2px">
+              <input type="text" placeholder="010-0000-0000" value="010-5469-3263"
+                style="width:48%;border:1px solid #e0e0e0;border-radius:4px;padding:3px 6px;font-size:10px;font-family:inherit">
+              <input type="text" placeholder="email@domain.com" value="bskim@mobydickre.com"
+                style="width:51%;border:1px solid #e0e0e0;border-radius:4px;padding:3px 6px;font-size:10px;font-family:inherit">
+            </div>
+            <div class="contact-row" data-idx="2">
+              <input type="text" placeholder="이름·직책" value="김태경 과장"
+                style="width:100%;border:1px solid #e0e0e0;border-radius:4px;padding:3px 6px;font-size:10px;font-family:inherit;margin-bottom:2px">
+              <input type="text" placeholder="010-0000-0000" value="010-2001-6792"
+                style="width:48%;border:1px solid #e0e0e0;border-radius:4px;padding:3px 6px;font-size:10px;font-family:inherit">
+              <input type="text" placeholder="email@domain.com" value="tkkim@mobydickre.com"
+                style="width:51%;border:1px solid #e0e0e0;border-radius:4px;padding:3px 6px;font-size:10px;font-family:inherit">
+            </div>
+          </div>
+        </div>
+
+      <div id="perfWarn" style="display:none;margin-top:8px;background:#fff3e0;border:1px solid #ffb74d;border-radius:6px;padding:7px 10px;font-size:10px;color:#e65100;line-height:1.6"></div>
+      </div><!-- /sb-sec-body sec3 -->
+    </div><!-- /sb-sec PPT설정 -->
+
+    </div><!-- /sb-top -->
+    <div class="sel-bar" id="selBar">
+      <button class="btn btn-out btn-sm" onclick="toggleAll(true)">전체선택</button>
+      <button class="btn btn-out btn-sm" onclick="toggleAll(false)">전체해제</button>
+      <span id="selCnt">0개 선택</span>
+    </div>
+    <div class="blist" id="blist">
+      <div style="padding:20px;text-align:center;color:#ccc;font-size:12px">엑셀을 업로드하면<br>건물 목록이 표시됩니다</div>
+    </div>
+  </div>
+
+  <div class="main" id="main">
+    <div class="grid" id="grid"></div>
+  </div>
+</div>
+
+<div class="abar" id="abar">
+  <div class="cinfo"><strong id="acnt">0</strong>개 건물 선택됨</div>
+  <button class="btn btn-green" onclick="genPPT()" style="margin-left:auto">📑 선택 건물 PPT 생성</button>
+</div>
+
+<div class="ov" id="ov">
+  <div class="sp"></div>
+  <div class="ot" id="ot">PPT 생성 중...</div>
+  <div class="os" id="os">잠시만 기다려주세요</div>
+</div>
+
+<div id="hmap"></div>
+
+<!-- 이미지 관리 모달 -->
+<div id="imgMgrModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:998;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;width:820px;max-width:95vw;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,.3)">
+    <!-- 헤더 -->
+    <div style="background:#002060;color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+      <div>
+        <div style="font-size:15px;font-weight:700">🗂 이미지 관리</div>
+        <div style="font-size:11px;opacity:.6;margin-top:2px">업로드된 이미지를 확인하고 삭제하거나 교체할 수 있습니다</div>
+      </div>
+      <button onclick="closeImgMgr()" style="background:rgba(255,255,255,.15);border:none;color:#fff;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:13px">✕ 닫기</button>
+    </div>
+    <!-- 탭 -->
+    <div style="display:flex;border-bottom:2px solid #f0f0f0;flex-shrink:0;padding:0 20px">
+      <button id="tabPh" onclick="switchTab('ph')" style="padding:10px 18px;border:none;background:none;font-weight:700;font-size:12px;cursor:pointer;border-bottom:2px solid #002060;color:#002060;margin-bottom:-2px">📷 대표사진 (<span id="phCnt">0</span>)</button>
+      <button id="tabFl" onclick="switchTab('fl')" style="padding:10px 18px;border:none;background:none;font-weight:700;font-size:12px;cursor:pointer;border-bottom:2px solid transparent;color:#888;margin-bottom:-2px">📐 도면 (<span id="flCnt">0</span>)</button>
+    </div>
+    <!-- 검색 + 전체삭제 -->
+    <div style="padding:10px 20px;display:flex;gap:8px;align-items:center;border-bottom:1px solid #f0f0f0;flex-shrink:0">
+      <input type="text" id="imgSearch" placeholder="파일명 검색..." oninput="renderImgMgr()"
+        style="flex:1;border:1px solid #ddd;border-radius:6px;padding:6px 10px;font-size:12px;font-family:inherit">
+      <button onclick="clearAllImgs()" class="btn btn-out btn-sm" style="color:#e53935;border-color:#e53935;white-space:nowrap">🗑 전체 삭제</button>
+      <label class="btn btn-out btn-sm" style="cursor:pointer;white-space:nowrap">
+        ➕ 추가 업로드
+        <input type="file" id="mgrAddInput" accept="image/*" multiple style="display:none" onchange="mgrAddFiles(this)">
+      </label>
+    </div>
+    <!-- 이미지 그리드 -->
+    <div id="imgMgrGrid" style="flex:1;overflow-y:auto;padding:16px 20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;align-content:start">
+    </div>
+    <!-- 하단 -->
+    <div style="padding:10px 20px;border-top:1px solid #f0f0f0;text-align:right;font-size:11px;color:#888;flex-shrink:0" id="imgMgrFooter"></div>
+  </div>
+</div>
+
+<script>
+let buildings = [];
+let vacancies = {};
+let photos = {};
+let floors = {};
+
+// ═══ 엑셀 파싱 ═══
+document.getElementById('exI').addEventListener('change', function(e) {
+  const file = e.target.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = evt => {
+    try {
+      const wb = XLSX.read(evt.target.result, {type:'binary'});
+      parseDB(wb);
+      document.getElementById('exLbl').textContent = '✅ ' + file.name;
+      collapseSec('sec1', file.name);
+      document.getElementById('exZ').classList.add('done');
+    } catch(err) { alert('파싱 오류: ' + err.message); }
+  };
+  reader.readAsBinaryString(file);
+});
+
+function parseDB(wb) {
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const raw = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+
+  // row[0]=영문헤더, row[1]=한글헤더, row[2]+= 데이터
+  const hdr = raw[1] || [];
+  const ci = name => hdr.findIndex(h => h && String(h).includes(name));
+
+  const iCode  = 0;
+  const iName  = ci('빌딩명') >= 0 ? ci('빌딩명') : ci('Building');
+  const iAddr  = ci('주소');
+  const iStn   = ci('지하철역');
+  const iLine  = ci('호선');
+  const iWalk  = ci('도보');
+  const iGFA   = ci('연면적');
+  const iFlr   = ci('규모');
+  const iYear  = ci('준공');
+  const iNet   = ci('전용면적');
+  const iLease = ci('임대면적');
+  const iRatio = ci('전용률') >= 0 ? ci('전용률') : ci('전용율');
+  const iPark  = ci('총 주차');
+  const iElev  = ci('총 승강기');
+  const iLat   = ci('위도');
+  const iLon   = ci('경도');
+
+  buildings = [];
+  const seen = new Set();
+
+  for(let r = 2; r < raw.length; r++) {
+    const row = raw[r];
+    const code = String(row[iCode]||'').trim();
+    const name = String(iName >= 0 ? row[iName] : '').trim();
+    if(!name || name === '빌딩명' || seen.has(code)) continue;
+    seen.add(code);
+
+    const stn  = String(row[iStn]||'').trim();
+    const line = String(row[iLine]||'').trim();
+    const walk = String(row[iWalk]||'').trim();
+    // DB값에 이미 "역/호선/도보" 포함 — 접미사 중복 추가하지 않음
+    const locStr = [stn, line, walk].filter(Boolean).join(' ');
+
+    const gfa    = row[iGFA];
+    // DB 연면적 컬럼은 이미 평(坪) 단위 — 변환 불필요
+    const gfaPy  = gfa && !isNaN(Number(gfa)) ? Math.round(Number(gfa)) : null;
+    const net    = row[iNet];
+    const ratio  = row[iRatio];
+
+    buildings.push({
+      idx: buildings.length,
+      code, name,
+      address:   String(iAddr >= 0 ? row[iAddr] : '').trim(),
+      location:  locStr,
+      gfa:       gfaPy ? gfaPy.toLocaleString()+' 평' : (gfa ? String(gfa) : '-'),
+      floors:    String(iFlr >= 0 ? row[iFlr] : '-').trim() || '-',
+      year:      row[iYear] ? String(row[iYear]).trim()+'년' : '-',
+      netArea:   net && !isNaN(Number(net)) ? Number(net).toFixed(2)+' 평' : '-',
+      ratio:     ratio && !isNaN(Number(ratio)) ? (Number(ratio)*100).toFixed(1)+'%' : '-',
+      parking:   row[iPark] ? String(row[iPark])+'대' : '-',
+      elevator:  row[iElev] ? String(row[iElev])+'대' : '-',
+      photoFile: name, floorFile: name+'_도면', selected: true,
+      lat: (iLat >= 0 && row[iLat] && !isNaN(Number(row[iLat]))) ? Number(row[iLat]) : null,
+      lon: (iLon >= 0 && row[iLon] && !isNaN(Number(row[iLon]))) ? Number(row[iLon]) : null
+    });
+  }
+
+  // 공실 시트
+  vacancies = {};
+  const vacSheet = wb.SheetNames.find(n => n.includes('공실'));
+  if(vacSheet) {
+    const ws2 = wb.Sheets[vacSheet];
+    const raw2 = XLSX.utils.sheet_to_json(ws2, {header:1, defval:''});
+    const hdr2 = raw2[1] || [];
+    const c2 = name => hdr2.findIndex(h => h && String(h).includes(name));
+    const vCode = 0, vFlr = c2('층수'), vNet = c2('전용면적'), vLs = c2('임대면적');
+    const vDep = c2('보증금'), vRent = c2('임대료'), vMgmt = c2('관리비'), vMove = c2('입주');
+
+    for(let r = 2; r < raw2.length; r++) {
+      const row = raw2[r];
+      const code = String(row[vCode]||'').trim();
+      if(!code) continue;
+      if(!vacancies[code]) vacancies[code] = [];
+      vacancies[code].push({
+        floor: vFlr >= 0 && row[vFlr] ? String(row[vFlr])+'F' : '-',
+        net:   vNet >= 0 && row[vNet] ? Number(row[vNet]).toFixed(2) : '-',
+        lease: vLs  >= 0 && row[vLs]  ? Number(row[vLs]).toFixed(2) : '-',
+        dep:   vDep >= 0 && row[vDep] ? Number(row[vDep]).toLocaleString() : '-',
+        rent:  vRent>= 0 && row[vRent]? Number(row[vRent]).toLocaleString() : '-',
+        mgmt:  vMgmt>= 0 && row[vMgmt]? Number(row[vMgmt]).toLocaleString() : '-',
+        move:  vMove>= 0 ? String(row[vMove]||'-').trim() : '-'
+      });
+    }
+  }
+
+  // welcome removed
+  document.getElementById('selBar').style.display = 'flex';
+  document.getElementById('abar').style.display = 'flex';
+  renderList();
+  renderGrid();
+  updateCount();
+}
+
+// ═══ 이미지 ═══
+function loadImgs(input, store, lbl, zoneId) {
+  const files = Array.from(input.files); if(!files.length) return;
+  let done = 0;
+  files.forEach(f => {
+    const reader = new FileReader();
+    reader.onload = evt => {
+      store[f.name.replace(/\.[^.]+$/, '').toLowerCase()] = evt.target.result;
+      if(++done === files.length) {
+        document.getElementById(lbl).innerHTML = `✅ ${files.length}개 선택됨`;
+        document.getElementById(zoneId).classList.add('done');
+        refreshImgStat();
+        if(buildings.length) { refreshMatch(); renderList(); }
+      }
+    };
+    reader.readAsDataURL(f);
+  });
+}
+document.getElementById('phI').addEventListener('change', function(){ loadImgs(this, photos, 'phLbl', 'phZ'); });
+document.getElementById('flI').addEventListener('change', function(){ loadImgs(this, floors, 'flLbl', 'flZ'); });
+
+function refreshImgStat() {
+  const pc = Object.keys(photos).length, fc = Object.keys(floors).length;
+  const el = document.getElementById('imgStat');
+  el.style.display = (pc||fc) ? 'block' : 'none';
+  el.textContent = `📷 대표사진 ${pc}개  📐 도면 ${fc}개 로드됨`;
+  document.getElementById('imgMgrBtn').style.display = (pc||fc) ? 'block' : 'none';
+  if(pc||fc) collapseSec('sec2', `대표사진 ${pc}개 · 도면 ${fc}개`);
+}
+
+function getPhoto(b) { const k=(b.photoFile||'').toLowerCase().trim(); return k?(photos[k]||null):null; }
+function getFloor(b) { const k=(b.floorFile||'').toLowerCase().trim(); return k?(floors[k]||null):null; }
+
+function refreshMatch() {
+  buildings.forEach((b,i) => {
+    const pi = document.getElementById(`ph_${i}`);
+    const fi = document.getElementById(`fl_${i}`);
+    if(pi) pi.classList.toggle('matched', !!getPhoto(b));
+    if(fi) fi.classList.toggle('matched', !!getFloor(b));
+    const th = document.getElementById(`th_${i}`);
+    if(th) { const p=getPhoto(b); th.innerHTML = p?`<img src="${p}">`:'🏢'; }
+    const pb = document.getElementById(`pb_${i}`);
+    if(pb) { const p=getPhoto(b); pb.innerHTML = p?`<img src="${p}">`:'📷'; }
+    const fb = document.getElementById(`fb_${i}`);
+    if(fb) { const f=getFloor(b); fb.innerHTML = f?`<img src="${f}">`:'<span>도면 없음</span>'; }
+  });
+}
+
+// ═══ 목록 ═══
+function renderList() {
+  const list = document.getElementById('blist');
+  list.innerHTML = '';
+  buildings.forEach((b,i) => {
+    const p = getPhoto(b);
+    const div = document.createElement('div');
+    div.className = 'bi'+(b.selected?' on':'');
+    div.innerHTML = `
+      <input type="checkbox" ${b.selected?'checked':''}>
+      <span class="bi-idx">${i+1}</span>
+      <div class="binfo">
+        <div class="bname">${b.name}</div>
+        <div class="bsub">${b.location||b.address||''}</div>
+      </div>`;
+    div.querySelector('input').addEventListener('change', ev => {
+      ev.stopPropagation(); buildings[i].selected = ev.target.checked;
+      div.classList.toggle('on', ev.target.checked);
+      updateCount(); updateCardHL();
+    });
+    div.addEventListener('click', ev => {
+      if(ev.target.tagName !== 'INPUT') { const cb=div.querySelector('input'); cb.checked=!cb.checked; cb.dispatchEvent(new Event('change')); }
+    });
+    list.appendChild(div);
+  });
+}
+
+function toggleAll(v) { buildings.forEach(b=>b.selected=v); renderList(); updateCount(); updateCardHL(); }
+function updateCount() {
+  const n=buildings.filter(b=>b.selected).length;
+  document.getElementById('selCnt').textContent=n+'개 선택';
+  document.getElementById('acnt').textContent=n;
+  updatePerfWarn();
+}
+function updateCardHL() {
+  document.querySelectorAll('.pcard').forEach((c,i) => { if(buildings[i]) c.classList.toggle('on',buildings[i].selected); });
+}
+
+// ═══ 그리드 ═══
+function renderGrid() {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  buildings.forEach((b,i) => {
+    const vac = vacancies[b.code]||[];
+    const p=getPhoto(b), f=getFloor(b);
+    const vacRows = vac.slice(0,6).map(v=>
+      `<tr><td>${v.floor}</td><td>${v.net}</td><td>${v.lease}</td><td>${v.dep}</td><td>${v.rent}</td><td>${v.mgmt}</td><td>${v.move}</td></tr>`
+    ).join('');
+    const card = document.createElement('div');
+    card.className='pcard'+(b.selected?' on':'');
+    card.innerHTML=`
+      <div class="pcard-head"><h4>${b.name}</h4><span class="num">#${i+1} · ${b.code}</span></div>
+      <div class="pcard-body">
+        <div class="pcl">
+          <div class="photo-box" id="pb_${i}">${p?`<img src="${p}">`:'📷'}</div>
+          <table class="itbl">
+            <tr><td>주소</td><td>${b.address||'-'}</td></tr>
+            <tr><td>위치</td><td>${b.location||'-'}</td></tr>
+            <tr><td>연면적</td><td>${b.gfa}</td></tr>
+            <tr><td>규모</td><td>${b.floors}</td></tr>
+            <tr><td>준공</td><td>${b.year}</td></tr>
+          </table>
+        </div>
+        <div class="pcr">
+          <div class="map-box"><span>🗺️</span><span>${b.address||'주소 없음'}</span></div>
+          <div class="floor-box" id="fb_${i}">${f?`<img src="${f}">`:'<span>도면 없음</span>'}</div>
+        </div>
+      </div>
+      <div class="fn-row">
+        <div class="fn-inp">
+          <label>대표사진 파일명 (확장자 제외)</label>
+          <input type="text" id="ph_${i}" placeholder="예: 파르나스타워" value="${b.photoFile}"
+            oninput="buildings[${i}].photoFile=this.value;refreshMatch()">
+        </div>
+        <div class="fn-inp">
+          <label>도면 파일명 (확장자 제외)</label>
+          <input type="text" id="fl_${i}" placeholder="예: 파르나스타워_도면" value="${b.floorFile}"
+            oninput="buildings[${i}].floorFile=this.value;refreshMatch()">
+        </div>
+      </div>
+      ${vac.length?`
+      <div class="vac-box">
+        <div class="vlbl">공실현황 (${vac.length}건)</div>
+        <table class="vtbl">
+          <thead><tr><th>층</th><th>전용(평)</th><th>임대(평)</th><th>보증금</th><th>임대료</th><th>관리비</th><th>입주</th></tr></thead>
+          <tbody>${vacRows}</tbody>
+        </table>
+      </div>`:''}`;
+    grid.appendChild(card);
+  });
+}
+
+// ═══ 지도 캡처 ═══
+// Kakao 지오코딩 (주소 → 좌표)
+async function kakaoGeo(query) {
+  const key = document.getElementById('cfgKakaoKey')?.value?.trim();
+  if(!key) return null;
+  try {
+    const res = await fetch(
+      `https://dapi.kakao.com/v2/local/search/address.json?query=${encodeURIComponent(query)}&size=1`,
+      {headers:{'Authorization':'KakaoAK '+key}}
+    );
+    const data = await res.json();
+    const doc = data.documents?.[0];
+    if(doc) return {lat:parseFloat(doc.y), lon:parseFloat(doc.x), src:'kakao_addr'};
+  } catch(e){}
+  return null;
+}
+
+// Kakao 키워드 검색 (빌딩명 → 좌표)
+async function kakaoKeyword(query) {
+  const key = document.getElementById('cfgKakaoKey')?.value?.trim();
+  if(!key) return null;
+  try {
+    const res = await fetch(
+      `https://dapi.kakao.com/v2/local/search/keyword.json?query=${encodeURIComponent(query)}&size=1`,
+      {headers:{'Authorization':'KakaoAK '+key}}
+    );
+    const data = await res.json();
+    const doc = data.documents?.[0];
+    if(doc) return {lat:parseFloat(doc.y), lon:parseFloat(doc.x), src:'kakao_kw'};
+  } catch(e){}
+  return null;
+}
+
+async function geocode(addr, buildingName) {
+  if(!addr && !buildingName) return null;
+  const hasKey = document.getElementById('cfgKakaoKey')?.value?.trim();
+
+  if(hasKey) {
+    // Kakao: 주소 검색 먼저 (가장 정확)
+    if(addr) {
+      const r1 = await kakaoGeo(addr);
+      if(r1) return r1;
+    }
+    // Kakao: 빌딩명 키워드 검색
+    if(buildingName) {
+      const r2 = await kakaoKeyword(buildingName);
+      if(r2) return r2;
+    }
+    // Kakao 실패(CORS 등) 시 OSM 폴백
+    console.warn('Kakao geocoding 실패 — OSM으로 재시도');
+  }
+  // OSM 폴백 (API키 없거나 Kakao 실패 시)
+  {
+    // API키 없을 때: OpenStreetMap Nominatim 폴백
+    const fallback = async q => {
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1&countrycodes=kr`,
+          {headers:{'Accept-Language':'ko'}}
+        );
+        const d = await res.json();
+        return d[0] || null;
+      } catch(e){ return null; }
+    };
+    if(buildingName) {
+      const r = await fallback(buildingName+' 서울');
+      if(r && r.class !== 'highway') return {lat:parseFloat(r.lat), lon:parseFloat(r.lon), src:'osm'};
+    }
+    if(addr) {
+      const r = await fallback(addr);
+      if(r && r.class !== 'highway') return {lat:parseFloat(r.lat), lon:parseFloat(r.lon), src:'osm'};
+    }
+  }
+  return null;
+}
+
+async function captureMap(lat, lon) {
+  return new Promise(resolve => {
+    const c = document.getElementById('hmap');
+    c.innerHTML = '<div id="_cm" style="width:700px;height:450px"></div>';
+    const el = document.getElementById('_cm');
+    let done=false;
+    const map = L.map(el,{zoomControl:false,attributionControl:false});
+    const layer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{crossOrigin:'anonymous'});
+    let tTotal=0, tLoaded=0;
+    layer.on('tileloadstart',()=>tTotal++);
+    layer.on('tileload',()=>{ tLoaded++; if(tLoaded>=tTotal&&tTotal>0) doCapture(); });
+    layer.addTo(map);
+    map.setView([lat,lon],16);
+    L.circleMarker([lat,lon],{radius:12,fillColor:'#e74c3c',color:'#fff',weight:3,fillOpacity:1}).addTo(map);
+    function doCapture(){ if(done)return; done=true;
+      setTimeout(async()=>{
+        try{
+          const canvas=await html2canvas(el,{useCORS:true,allowTaint:false,width:700,height:450,logging:false});
+          const b64=canvas.toDataURL('image/jpeg',.92);
+          map.remove(); c.innerHTML=''; resolve(b64);
+        }catch(e){ map.remove(); c.innerHTML=''; resolve(null); }
+      },700);
+    }
+    setTimeout(()=>{ if(!done) doCapture(); },5000);
+  });
+}
+
+// ═══ PPT 생성 ═══
+async function genPPT() {
+  const sel = buildings.filter(b=>b.selected);
+  if(!sel.length){ alert('건물을 1개 이상 선택하세요.'); return; }
+  showOv(true,'PPT 초기화 중...','');
+  try {
+    const pptx = new PptxGenJS();
+    pptx.defineLayout({name:'STD10',width:10,height:7.5});
+    pptx.layout = 'STD10';
+
+    // 목록 슬라이드
+    await addListSlide(pptx, sel);
+
+    // 건물 슬라이드
+    for(let bi=0; bi<sel.length; bi++){
+      const b=sel[bi];
+      showOv(true,`슬라이드 생성 (${bi+1}/${sel.length})`,b.name);
+      await addBldSlide(pptx, b, bi+1, sel.length);
+    }
+
+    showOv(true,'파일 저장 중...','다운로드 시작');
+    const blob = await pptx.write({outputType:'blob'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href=url; a.download=`임대안내문_${dateStr()}.pptx`;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url),3000);
+  } catch(err){
+    console.error(err);
+    alert('PPT 생성 오류:\n'+err.message);
+  } finally { showOv(false); }
+}
+
+function addHdr(slide, title, num, total) {
+  const f = getCfg().font;
+  // 헤더 스트립: bg1×95% = #F2F2F2 (실제 템플릿 색상)
+  slide.addShape('rect',{x:.369,y:.183,w:9.255,h:.708,fill:{color:'F2F2F2'}});
+  // GBD 포인트 박스: #002060
+  slide.addShape('rect',{x:.375,y:.183,w:.74,h:.697,fill:{color:'002060'}});
+  slide.addText('GBD',{x:.342,y:.183,w:.88,h:.697,fontSize:20,bold:true,color:'FFFFFF',align:'center',valign:'middle',fontFace:f});
+  // 건물명: #002060 on light strip
+  slide.addText(title,{x:1.073,y:.495,w:5.5,h:.404,fontSize:13,bold:true,color:'002060',valign:'middle',fontFace:f});
+  // MOBYDICK RE: #002060
+  slide.addText('MOBYDICK RE',{x:7.664,y:.487,w:2.095,h:.404,fontSize:10,color:'002060',align:'right',valign:'middle',fontFace:f});
+  // 구분선: accent1×75% = #2F5496
+  slide.addShape('line',{x:.369,y:.885,w:9.255,h:0,line:{color:'2F5496',width:.75}});
+}
+
+function getContacts() {
+  const rows = document.querySelectorAll('.contact-row');
+  return Array.from(rows).map(row => {
+    const inputs = row.querySelectorAll('input');
+    return {
+      name:  inputs[0]?.value.trim() || '',
+      phone: inputs[1]?.value.trim() || '',
+      email: inputs[2]?.value.trim() || ''
+    };
+  }).filter(c => c.name);
+}
+
+function addFooter(slide, num, total) {
+  const f = getCfg().font;
+  const contacts = getContacts();
+  slide.addShape('rect',{x:.369,y:6.836,w:9.211,h:.577,fill:{color:'F2F2F2'}});
+  slide.addShape('rect',{x:.369,y:6.847,w:1.365,h:.547,fill:{color:'002060'}});
+  slide.addText('CONTACT\nUS',{x:.369,y:6.847,w:1.365,h:.547,fontSize:11,bold:true,color:'D9D9D9',align:'center',valign:'middle',fontFace:f});
+
+  // 원본 PPT와 동일한 형식: 이름(볼드) + 전화 + 이메일 각각 별도 텍스트
+  const cx = [1.80, 4.70, 7.55];
+  const cw = [2.75, 2.65, 1.80];
+  contacts.slice(0,3).forEach((c, i) => {
+    const lines = [
+      {text: c.name,  options:{bold:true, fontSize:9,   color:'444444', fontFace:f}},
+      {text: '\n', options:{fontSize:4}},
+      {text: c.phone, options:{bold:false, fontSize:8,  color:'808080', fontFace:f}},
+      {text: '\n', options:{fontSize:2}},
+      {text: c.email, options:{bold:false, fontSize:7.5,color:'808080', fontFace:f}},
+    ];
+    slide.addText(lines, {x:cx[i], y:6.847, w:cw[i], h:.547, valign:'middle', fontFace:f});
+  });
+
+  if(num) slide.addText(`${num} / ${total}`,{x:9.1,y:6.853,w:.5,h:.547,fontSize:8,color:'AAAAAA',align:'right',valign:'middle',fontFace:f});
+}
+
+async function addListSlide(pptx, sel) {
+  const slide = pptx.addSlide();
+  const {font:f, size:sz} = getCfg();
+  slide.background={color:'FFFFFF'};
+  addHdr(slide,'GBD Office List','','');
+  slide.addText('임대 안내 건물 목록',{x:.37,y:1.05,w:9.26,h:.65,fontSize:24,bold:true,color:'002060',valign:'middle',fontFace:f});
+  slide.addShape('line',{x:.37,y:1.65,w:9.26,h:0,line:{color:'4472C4',width:2}});
+  const rows = Math.ceil(sel.length/3);
+  const bgH = Math.max(rows*0.29+0.5, 4.5);
+  slide.addShape('rect',{x:.25,y:1.85,w:9.5,h:bgH,fill:{color:'F5F7FA'}});
+  const cx = [.40, 3.73, 7.06];
+  // 슬라이드 2부터 건물 슬라이드 (1=목록)
+  sel.forEach((b,i)=>{
+    slide.addText(`· ${b.name}`,{
+      x:cx[i%3], y:1.95+Math.floor(i/3)*0.29, w:3.2, h:.29,
+      fontSize:sz+2, color:'002060', valign:'middle', fontFace:f,
+      hyperlink:{slide: i+2}   // 클릭 시 해당 건물 슬라이드로 이동
+    });
+  });
+  addFooter(slide, null, null);
+}
+
+async function addBldSlide(pptx, b, num, total) {
+  const slide = pptx.addSlide();
+  const {font:f, size:sz, withMap} = getCfg();
+  slide.background={color:'FFFFFF'};
+  addHdr(slide, b.name, num, total);
+
+  // ── 대표사진
+  const pd = getPhoto(b);
+  if(pd) {
+    try { slide.addImage({data:pd,x:.351,y:1.158,w:2.206,h:2.589,sizing:{type:'cover',w:2.206,h:2.589}}); }
+    catch(e){ noImg(slide,.351,1.158,2.206,2.589,'사진 없음'); }
+  } else { noImg(slide,.351,1.158,2.206,2.589,'대표사진 없음'); }
+
+  // ── 건물 개요
+  slide.addShape('rect',{x:3.052,y:1.163,w:.107,h:.204,fill:{color:'BFBFBF'}});
+  slide.addText('건물 개요',{x:3.159,y:1.122,w:1.5,h:.286,fontSize:11,bold:true,color:'002060',fontFace:f});
+  slide.addTable([
+    [cell('주소'),   cell(b.address||'-',false)],
+    [cell('위치'),   cell(b.location||'-',false)],
+    [cell('연면적'), cell(b.gfa,false)],
+    [cell('규모'),   cell(b.floors,false)],
+    [cell('준공일'), cell(b.year,false)],
+    [cell('기준층'), cell(b.netArea,false)],
+    [cell('전용율'), cell(b.ratio,false)],
+    [cell('승강기'), cell(b.elevator,false)],
+    [cell('주차'),   cell(b.parking,false)],
+  ],{x:3.052,y:1.368,w:3.304,h:2.55,rowH:.283,border:{pt:.5,color:'BFBFBF'},colW:[.85,2.454]});
+
+  // ── 건물 위치 (지도)
+  slide.addShape('rect',{x:6.841,y:1.163,w:.107,h:.204,fill:{color:'BFBFBF'}});
+  slide.addText('건물 위치',{x:6.902,y:1.122,w:1.5,h:.286,fontSize:11,bold:true,color:'002060',fontFace:f});
+  slide.addShape('rect',{x:6.851,y:1.507,w:2.757,h:2.241,fill:{color:'E8EEF8'}});
+  let mapData=null;
+  if(withMap && (b.lat || b.address)){
+    showOv(true,`지도 캡처 (${num}/${total})`,b.name);
+    let geo = null;
+    // 최우선: DB에 위도/경도 직접 입력된 경우
+    if(b.lat && b.lon) {
+      geo = {lat: b.lat, lon: b.lon, src:'db'};
+    } else {
+      // 빌딩명 우선 → 주소 폴백
+      geo = await geocode(b.address, b.name);
+    }
+    if(geo) mapData = await captureMap(geo.lat, geo.lon);
+  }
+  if(mapData){
+    try{ slide.addImage({data:mapData,x:6.851,y:1.507,w:2.757,h:2.241,sizing:{type:'cover',w:2.757,h:2.241}}); }catch(e){}
+  } else {
+    slide.addText(withMap?'🗺️ 지도 없음':'🗺️ 지도 생략됨\n(설정에서 활성화 가능)',{x:6.851,y:1.507,w:2.757,h:2.241,fontSize:10,color:'AABBCC',align:'center',valign:'middle'});
+  }
+
+  // ── 기준층 도면
+  slide.addShape('rect',{x:6.828,y:4.035,w:.107,h:.204,fill:{color:'BFBFBF'}});
+  slide.addText('기준층 도면',{x:6.889,y:3.983,w:1.5,h:.286,fontSize:11,bold:true,color:'002060',fontFace:f});
+  slide.addShape('rect',{x:6.851,y:4.357,w:2.757,h:2.28,fill:{color:'FAFAFA'},line:{color:'E8E8E8',pt:.5}});
+  const fd = getFloor(b);
+  if(fd){
+    try{ slide.addImage({data:fd,x:6.851,y:4.357,w:2.757,h:2.28,sizing:{type:'contain',w:2.757,h:2.28}}); }catch(e){}
+  } else {
+    slide.addText('도면 없음',{x:6.851,y:4.357,w:2.757,h:2.28,fontSize:9,color:'CCCCCC',align:'center',valign:'middle'});
+  }
+
+  // ── 공실현황
+  slide.addShape('rect',{x:.372,y:4.043,w:.107,h:.204,fill:{color:'BFBFBF'}});
+  slide.addText('공실현황 / 임대료',{x:.434,y:4.002,w:2.2,h:.286,fontSize:11,bold:true,color:'002060'});
+  slide.addText('단위:원/ 3.3㎡',{x:4.5,y:4.168,w:2.0,h:.236,fontSize:8,color:'888888',align:'right'});
+
+  const vac=(vacancies[b.code]||[]).slice(0,7);
+  const {font:f2, size:sz2} = getCfg();
+  const hdrRow=[
+    vcell('층'), vcell('전용면적\n(평)'), vcell('임대면적\n(평)'),
+    vcell('보증금\n(원/평)'), vcell('임대료\n(원/평)'), vcell('관리비\n(원/평)'), vcell('입주시기')
+  ];
+
+  if(vac.length === 0) {
+    // 공실 없음: 헤더 + "공실 없음" 텍스트
+    const emptyRows = Array.from({length:7}, (_,ri) => {
+      const bg = ri%2===1?'F8F8F8':'FFFFFF';
+      return Array(7).fill(dcell('', bg, 'center'));
+    });
+    slide.addTable([hdrRow,...emptyRows],{
+      x:.369,y:4.404,w:6.154,h:2.187,
+      rowH:.273, border:{pt:.5,color:'BFBFBF'},
+      colW:[.60,.85,.85,1.05,1.05,1.00,.754]
+    });
+    slide.addText('공실 없음',{
+      x:.369, y:4.677, w:6.154, h:1.64,
+      fontSize:18, bold:true, color:'AAAAAA',
+      align:'center', valign:'middle', fontFace:f2
+    });
+  } else {
+    const dataRows = Array.from({length:7},(_,ri)=>{
+      const v=vac[ri];
+      const bg = ri%2===1?'F8F8F8':'FFFFFF';
+      return v ? [
+        dcell(v.floor,bg,'center'), dcell(v.net,bg,'center'), dcell(v.lease,bg,'center'),
+        dcell(v.dep,bg,'right'), dcell(v.rent,bg,'right'), dcell(v.mgmt,bg,'right'), dcell(v.move,bg,'center')
+      ] : Array(7).fill(dcell('',bg,'center'));
+    });
+    slide.addTable([hdrRow,...dataRows],{
+      x:.369,y:4.404,w:6.154,h:2.187,
+      rowH:.273, border:{pt:.5,color:'BFBFBF'},
+      colW:[.60,.85,.85,1.05,1.05,1.00,.754]
+    });
+  }
+
+  addFooter(slide, num, total);
+}
+
+function cell(txt,isKey=true) {
+  const f=getCfg().font, sz=getCfg().size;
+  return {text:String(txt), options:isKey
+    ? {bold:true,color:'555577',fontSize:sz,fill:{color:'F5F5F8'},align:'center',valign:'middle',fontFace:f}
+    : {fontSize:sz,color:'1a1a2e',valign:'middle',wrap:true,fontFace:f}};
+}
+function vcell(txt) {
+  const f=getCfg().font, sz=getCfg().size;
+  return {text:txt, options:{bold:true,color:'FFFFFF',fill:{color:'002060'},align:'center',valign:'middle',fontSize:sz,fontFace:f}};
+}
+function dcell(txt,bg,align) {
+  const f=getCfg().font, sz=getCfg().size;
+  return {text:String(txt), options:{fontSize:sz,align,fill:{color:bg},valign:'middle',fontFace:f}};
+}
+function noImg(slide,x,y,w,h,msg) {
+  slide.addShape('rect',{x,y,w,h,fill:{color:'EEEEEE'}});
+  slide.addText(msg,{x,y,w,h,fontSize:10,color:'BBBBBB',align:'center',valign:'middle'});
+}
+
+// ═══ 이미지 관리 모달 ═══
+let mgrTab = 'ph'; // 'ph' or 'fl'
+
+function openImgMgr() {
+  document.getElementById('imgMgrModal').style.display = 'flex';
+  switchTab('ph');
+}
+function closeImgMgr() {
+  document.getElementById('imgMgrModal').style.display = 'none';
+  refreshMatch();
+}
+
+function switchTab(tab) {
+  mgrTab = tab;
+  document.getElementById('tabPh').style.cssText = tab==='ph'
+    ? 'padding:10px 18px;border:none;background:none;font-weight:700;font-size:12px;cursor:pointer;border-bottom:2px solid #002060;color:#002060;margin-bottom:-2px'
+    : 'padding:10px 18px;border:none;background:none;font-weight:700;font-size:12px;cursor:pointer;border-bottom:2px solid transparent;color:#888;margin-bottom:-2px';
+  document.getElementById('tabFl').style.cssText = tab==='fl'
+    ? 'padding:10px 18px;border:none;background:none;font-weight:700;font-size:12px;cursor:pointer;border-bottom:2px solid #002060;color:#002060;margin-bottom:-2px'
+    : 'padding:10px 18px;border:none;background:none;font-weight:700;font-size:12px;cursor:pointer;border-bottom:2px solid transparent;color:#888;margin-bottom:-2px';
+  renderImgMgr();
+}
+
+function renderImgMgr() {
+  const store = mgrTab === 'ph' ? photos : floors;
+  const search = (document.getElementById('imgSearch').value||'').toLowerCase();
+  const keys = Object.keys(store).filter(k => !search || k.includes(search));
+  const grid = document.getElementById('imgMgrGrid');
+
+  document.getElementById('phCnt').textContent = Object.keys(photos).length;
+  document.getElementById('flCnt').textContent = Object.keys(floors).length;
+  document.getElementById('imgMgrFooter').textContent = `${keys.length}개 표시 중 (전체 ${Object.keys(store).length}개)`;
+
+  if(!keys.length) {
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:#ccc;padding:40px;font-size:13px">
+      ${search ? '검색 결과가 없습니다' : '업로드된 이미지가 없습니다'}</div>`;
+    return;
+  }
+
+  grid.innerHTML = keys.map(k => `
+    <div style="border:1px solid #e8e8e8;border-radius:8px;overflow:hidden;position:relative;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.06)">
+      <div style="height:100px;background:#f5f5f5;display:flex;align-items:center;justify-content:center;overflow:hidden">
+        <img src="${store[k]}" style="max-width:100%;max-height:100%;object-fit:contain">
+      </div>
+      <div style="padding:6px 8px">
+        <div style="font-size:10px;font-weight:700;color:#333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${k}">${k}</div>
+        <div style="display:flex;gap:4px;margin-top:5px">
+          <label style="flex:1;background:#f0f4ff;border:1px solid #c8d8f8;border-radius:4px;padding:3px 0;text-align:center;font-size:10px;color:#2c4a8a;cursor:pointer;font-weight:700">
+            🔄 교체
+            <input type="file" accept="image/*" style="display:none" onchange="replaceImg('${k}', this)">
+          </label>
+          <button onclick="deleteImg('${k}')" style="flex:1;background:#fff0f0;border:1px solid #ffcdd2;border-radius:4px;padding:3px 0;font-size:10px;color:#e53935;cursor:pointer;font-weight:700">🗑 삭제</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function deleteImg(key) {
+  if(!confirm(`"${key}" 이미지를 삭제하시겠습니까?`)) return;
+  const store = mgrTab === 'ph' ? photos : floors;
+  delete store[key];
+  renderImgMgr();
+  refreshImgStat();
+  const pc = Object.keys(photos).length, fc = Object.keys(floors).length;
+  if(!pc && !fc) document.getElementById('imgMgrBtn').style.display = 'none';
+}
+
+function replaceImg(key, input) {
+  const file = input.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = evt => {
+    const store = mgrTab === 'ph' ? photos : floors;
+    store[key] = evt.target.result;
+    renderImgMgr();
+    refreshMatch();
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearAllImgs() {
+  const label = mgrTab === 'ph' ? '대표사진' : '도면';
+  const store = mgrTab === 'ph' ? photos : floors;
+  const n = Object.keys(store).length;
+  if(!n) return;
+  if(!confirm(`${label} ${n}개를 모두 삭제하시겠습니까?`)) return;
+  if(mgrTab === 'ph') { for(const k in photos) delete photos[k]; }
+  else { for(const k in floors) delete floors[k]; }
+  renderImgMgr();
+  refreshImgStat();
+}
+
+function mgrAddFiles(input) {
+  const files = Array.from(input.files); if(!files.length) return;
+  const store = mgrTab === 'ph' ? photos : floors;
+  let done = 0;
+  files.forEach(f => {
+    const reader = new FileReader();
+    reader.onload = evt => {
+      store[f.name.replace(/\.[^.]+$/,'').toLowerCase()] = evt.target.result;
+      if(++done === files.length) { renderImgMgr(); refreshImgStat(); refreshMatch(); }
+    };
+    reader.readAsDataURL(f);
+  });
+  input.value = '';
+}
+
+function showOv(show,main,sub){
+  document.getElementById('ov').classList.toggle('show',show);
+  if(main!==undefined) document.getElementById('ot').textContent=main;
+  if(sub!==undefined) document.getElementById('os').textContent=sub;
+}
+function dateStr(){
+  const d=new Date();
+  return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// ═══ 설정값 ═══
+function getCfg() {
+  return {
+    font: document.getElementById('cfgFont').value,
+    size: parseInt(document.getElementById('cfgSize').value),
+    withMap: document.getElementById('cfgMap').checked
+  };
+}
+
+// 지도 옵션 변경 시 라벨 업데이트
+document.getElementById('cfgMap').addEventListener('change', function() {
+  document.getElementById('cfgMapLbl').textContent = this.checked
+    ? '포함 (건물당 약 5초 소요)' : '생략 (빠른 생성)';
+});
+
+// 선택 수 변경 시 성능 경고
+// ═══ 섹션 접기/펼치기 ═══
+function toggleSec(id) {
+  const body = document.getElementById(id);
+  const arrow = document.getElementById(id+'-arrow');
+  const isOpen = body.classList.contains('open');
+  body.classList.toggle('open', !isOpen);
+  if(arrow) arrow.textContent = isOpen ? '▶' : '▼';
+}
+
+function collapseSec(id, doneText) {
+  const body = document.getElementById(id);
+  const arrow = document.getElementById(id+'-arrow');
+  const done = document.getElementById(id+'-done');
+  body.classList.remove('open');
+  if(arrow) arrow.textContent = '▶';
+  if(done) { done.textContent = '✅ ' + doneText; done.classList.add('show'); }
+}
+
+function updateKakaoStatus() {
+  const key = document.getElementById('cfgKakaoKey')?.value?.trim();
+  const el = document.getElementById('kakaoStatus');
+  if(!el) return;
+  el.textContent = key ? '✅' : '⚠️';
+  el.title = key ? 'Kakao API 키 설정됨' : 'API 키 없음 - OpenStreetMap 사용';
+}
+
+function updatePerfWarn() {
+  const n = buildings.filter(b=>b.selected).length;
+  const withMap = document.getElementById('cfgMap').checked;
+  const warn = document.getElementById('perfWarn');
+  if(n >= 50 && withMap) {
+    const mins = Math.round(n * 5 / 60);
+    warn.style.display = 'block';
+    warn.innerHTML = `⚠️ <strong>${n}개 건물 + 지도 포함</strong> → 예상 소요 약 <strong>${mins}분</strong><br>빠른 생성이 필요하면 위 "지도 포함"을 해제하세요.`;
+  } else if(n >= 200) {
+    warn.style.display = 'block';
+    warn.innerHTML = `⚠️ <strong>${n}개 건물</strong> — 이미지가 많으면 브라우저 메모리 부족이 발생할 수 있습니다. <strong>100개씩 나눠서</strong> 생성하는 것을 권장합니다.`;
+  } else {
+    warn.style.display = 'none';
+  }
+}
+</script>
+</body>
+</html>
