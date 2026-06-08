@@ -5,6 +5,7 @@
 <title>MOBYDICK RE · 부동산 PPT 생성기 v1.1</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -26,7 +27,7 @@ body{font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;background:#f0
 .sb-sec-body.open{display:block}
 .sb-sec-done{padding:7px 14px;font-size:11px;color:#27ae60;font-weight:600;display:none;align-items:center;gap:6px}
 .sb-sec-done.show{display:flex}
-.dz{border:2px dashed #ddd;border-radius:8px;padding:12px;text-align:center;cursor:pointer;background:#fafafa;transition:.2s}
+.dz{border:2px dashed #ddd;border-radius:8px;padding:12px;text-align:center;cursor:pointer;background:#fafafa;transition:.2s}.dz.drag{border-color:#4472C4;background:#e8f0fe;transform:scale(1.01)}
 .dz:hover{border-color:#4472C4;background:#f0f4ff}
 .dz.done{border:2px solid #27ae60;background:#f0fff4}
 .dz .ico{font-size:20px;margin-bottom:4px}
@@ -465,18 +466,19 @@ let photos = {};
 let floors = {};
 
 // ═══ 엑셀 파싱 ═══
+function parseExcel(binaryStr, fileName) {
+  try {
+    const wb = XLSX.read(binaryStr, {type:'binary'});
+    parseDB(wb);
+    document.getElementById('exLbl').textContent = '✅ ' + (fileName||'업로드됨');
+    collapseSec('sec1', fileName||'');
+    document.getElementById('exZ').classList.add('done');
+  } catch(err) { alert('파싱 오류: ' + err.message); }
+}
 document.getElementById('exI').addEventListener('change', function(e) {
   const file = e.target.files[0]; if(!file) return;
   const reader = new FileReader();
-  reader.onload = evt => {
-    try {
-      const wb = XLSX.read(evt.target.result, {type:'binary'});
-      parseDB(wb);
-      document.getElementById('exLbl').textContent = '✅ ' + file.name;
-      collapseSec('sec1', file.name);
-      document.getElementById('exZ').classList.add('done');
-    } catch(err) { alert('파싱 오류: ' + err.message); }
-  };
+  reader.onload = evt => parseExcel(evt.target.result, file.name);
   reader.readAsBinaryString(file);
 });
 
@@ -536,7 +538,22 @@ function parseDB(wb) {
       floors:    String(iFlr >= 0 ? row[iFlr] : '-').trim() || '-',
       year:      row[iYear] ? String(row[iYear]).trim()+'년' : '-',
       netArea:   net && !isNaN(Number(net)) ? Number(net).toFixed(2)+' 평' : '-',
-      ratio:     ratio && !isNaN(Number(ratio)) ? (Number(ratio)*100).toFixed(1)+'%' : '-',
+      ratio: (() => {
+        // 1) 셀 값이 있으면 파싱
+        if(ratio !== '' && ratio !== null && ratio !== undefined) {
+          if(typeof ratio === 'string' && ratio.includes('%')) {
+            const n = parseFloat(ratio);
+            if(!isNaN(n)) return n.toFixed(1)+'%';
+          }
+          const n = Number(ratio);
+          if(!isNaN(n) && n !== 0) return (n < 2 ? n*100 : n).toFixed(1)+'%';
+        }
+        // 2) 수식 셀 값이 없거나 0이면 전용면적÷임대면적으로 직접 계산
+        const netN   = Number(row[iNet]);
+        const leaseN = Number(row[iLease]);
+        if(!isNaN(netN) && !isNaN(leaseN) && leaseN > 0) return (netN/leaseN*100).toFixed(1)+'%';
+        return '-';
+      })(),
       parking:   row[iPark] ? String(row[iPark])+'대' : '-',
       elevator:  row[iElev] ? String(row[iElev])+'대' : '-',
       photoFile: name, floorFile: name+'_도면', selected: true,
@@ -890,22 +907,26 @@ async function geocode(addr, buildingName) {
   const hasKey = document.getElementById('cfgKakaoKey')?.value?.trim();
 
   if(hasKey) {
-    // Kakao: 빌딩명 키워드 먼저 (POI 정확도 높음)
-    if(buildingName) {
-      const r1 = await kakaoKeyword(buildingName);
+    // 1순위: 주소 (직접 입력 → 더 정확)
+    if(addr) {
+      const r1 = await kakaoGeo(addr);
       if(r1) return r1;
     }
-    // Kakao: 주소 검색 폴백
-    if(addr) {
-      const r2 = await kakaoGeo(addr);
+    // 2순위: 건물명 키워드 (주소 없거나 실패 시, 괄호 제거 재시도 포함)
+    if(buildingName) {
+      const r2 = await kakaoKeyword(buildingName);
       if(r2) return r2;
+      const cleanName = buildingName.replace(/\s*[\(（\[][^)）\]]*[\)）\]]/g,'').trim();
+      if(cleanName && cleanName !== buildingName) {
+        const r3 = await kakaoKeyword(cleanName);
+        if(r3) return r3;
+      }
     }
-    // Kakao 실패(CORS 등) 시 OSM 폴백
     console.warn('Kakao geocoding 실패 — OSM으로 재시도');
   }
   // OSM 폴백 (API키 없거나 Kakao 실패 시)
   {
-    // API키 없을 때: OpenStreetMap Nominatim 폴백
+    // 주소 우선, 없으면 건물명
     const fallback = async q => {
       try {
         const res = await fetch(
@@ -916,13 +937,21 @@ async function geocode(addr, buildingName) {
         return d[0] || null;
       } catch(e){ return null; }
     };
-    if(buildingName) {
-      const r = await fallback(buildingName+' 서울');
-      if(r && r.class !== 'highway') return {lat:parseFloat(r.lat), lon:parseFloat(r.lon), src:'osm'};
-    }
+    // 1순위: 주소
     if(addr) {
       const r = await fallback(addr);
       if(r && r.class !== 'highway') return {lat:parseFloat(r.lat), lon:parseFloat(r.lon), src:'osm'};
+    }
+    // 2순위: 건물명 (원본 → 괄호 제거 순으로 재시도)
+    if(buildingName) {
+      const r = await fallback(buildingName+' 서울');
+      if(r && r.class !== 'highway') return {lat:parseFloat(r.lat), lon:parseFloat(r.lon), src:'osm'};
+      // 괄호 포함 이름 실패 시 → 괄호 제거 후 재시도 (예: AJ빌딩(별관) → AJ빌딩)
+      const cleanName = buildingName.replace(/\s*[\(（\[][^)）\]]*[\)）\]]/g,'').trim();
+      if(cleanName && cleanName !== buildingName) {
+        const r2 = await fallback(cleanName+' 서울');
+        if(r2 && r2.class !== 'highway') return {lat:parseFloat(r2.lat), lon:parseFloat(r2.lon), src:'osm'};
+      }
     }
   }
   return null;
@@ -993,6 +1022,53 @@ async function captureMap(lat, lon) {
   try { return canvas.toDataURL('image/jpeg', 0.92); } catch(e) { return null; }
 }
 
+
+// ═══ 커버 슬라이드 ═══
+function addCoverSlide(pptx) {
+  const slide = pptx.addSlide();
+  const f = getCfg().font;
+
+  // 전체 배경: 진한 네이비
+  slide.addShape('rect', {x:0,y:0,w:10,h:7.5, fill:{color:'001540'}});
+
+  // 우측 대각선 패널 (포인트 컬러)
+  slide.addShape('rect', {x:6.2,y:0,w:3.8,h:7.5, fill:{color:'002060'}});
+
+  // 좌측 하단 수평 강조선
+  slide.addShape('rect', {x:0,y:5.8,w:6.0,h:0.03, fill:{color:'4472C4'}});
+
+  // GBD 박스 (좌상단)
+  slide.addShape('rect', {x:0.37,y:0.3,w:1.1,h:0.9, fill:{color:'FFFFFF'}});
+  slide.addText('GBD', {x:0.37,y:0.3,w:1.1,h:0.9,
+    fontSize:28, bold:true, color:'002060', align:'center', valign:'middle', fontFace:f});
+
+  // 보고서 제목 (좌측)
+  const now = new Date();
+  const ym = `${String(now.getFullYear()).slice(2)}.${String(now.getMonth()+1).padStart(2,'0')}`;
+  slide.addText('임대안내문', {x:0.37,y:1.5,w:5.5,h:1.1,
+    fontSize:44, bold:true, color:'FFFFFF', valign:'middle', fontFace:f});
+  slide.addText(ym, {x:0.37,y:2.55,w:5.5,h:0.75,
+    fontSize:36, bold:false, color:'8AABDC', valign:'middle', fontFace:f});
+
+  // 구분선
+  slide.addShape('rect', {x:0.37,y:3.55,w:0.08,h:1.6, fill:{color:'4472C4'}});
+
+  // 부제 (건물 수)
+  slide.addText('GBD Office Leasing Guide', {x:0.6,y:3.6,w:5.2,h:0.55,
+    fontSize:13, color:'AABBDD', valign:'middle', fontFace:f});
+
+  // MOBYDICK RE 브랜딩 (우측 패널)
+  slide.addText('MOBYDICK RE', {x:6.2,y:2.8,w:3.8,h:0.8,
+    fontSize:18, bold:true, color:'FFFFFF', align:'center', valign:'middle', fontFace:f});
+  slide.addText('Commercial Real estate\nConsulting Service', {x:6.2,y:3.55,w:3.8,h:0.85,
+    fontSize:10, color:'8AABDC', align:'center', valign:'middle', fontFace:f});
+
+  // 담당자 정보 (좌측 하단)
+  const contacts = getContacts();
+  const ctLines = contacts.slice(0,3).map(c=>`${c.name}  ${c.phone}`).join('  |  ');
+  slide.addText(ctLines, {x:0.37,y:6.85,w:9.26,h:0.45,
+    fontSize:9, color:'AABBDD', valign:'middle', fontFace:f});
+}
 // ═══ PPT 생성 ═══
 async function genPPT() {
   const sel = buildings.filter(b=>b.selected);
@@ -1002,6 +1078,9 @@ async function genPPT() {
     const pptx = new PptxGenJS();
     pptx.defineLayout({name:'STD10',width:10,height:7.5});
     pptx.layout = 'STD10';
+
+    // 커버 슬라이드
+    addCoverSlide(pptx);
 
     // 목록 슬라이드 (반환값: 목록 페이지 수)
     await addListSlide(pptx, sel);
@@ -1111,7 +1190,7 @@ async function addListSlide(pptx, sel) {
       const row = Math.floor(i / 3);
       // 건물 슬라이드 번호 = 목록 페이지 수 + 1(커버) + 건물 전체 인덱스
       const bldIdx = p * PER_PAGE + i;
-      const slideNum = listPageCount + 1 + bldIdx + 1; // 1=커버, +listPageCount=목록들, +1=1-indexed
+      const slideNum = listPageCount + 2 + bldIdx; // 1(커버) + listPageCount(목록) + bldIdx + 1-indexed
       slide.addText(`· ${b.name}`, {
         x: colX[col], y: START_Y + row * ROW_H, w:3.2, h:ROW_H,
         fontSize: sz+2, color:'002060', valign:'middle', fontFace:f,
@@ -1505,14 +1584,19 @@ function switchMainTab(tab) {
 
 // ═══ 좌표 추출 탭 기능 ═══
 let geoBuildings = [];
-let geoOriginalWb = null;  // 원본 워크북 저장
-
-let geoOriginalFile = null;  // 원본 파일명
+let geoOriginalWb = null;
+let geoOriginalBuffer = null; // 원본 ArrayBuffer (zip 패치용)
+let geoOriginalFile = null;
 
 function loadGeoExcel(input) {
   const file = input.files[0]; if(!file) return;
   geoOriginalFile = file.name;
   const reader = new FileReader();
+  // ArrayBuffer도 별도 저장 (zip 직접 패치용)
+  const r2 = new FileReader();
+  r2.onload = e2 => { geoOriginalBuffer = e2.target.result; };
+  r2.readAsArrayBuffer(file);
+
   reader.onload = evt => {
     geoOriginalWb = XLSX.read(evt.target.result, {type:'binary'});
     const ws = geoOriginalWb.Sheets[geoOriginalWb.SheetNames[0]];
@@ -1610,58 +1694,145 @@ async function startBatchGeo() {
   resultTitle.textContent = `조회 완료: ${done}개 성공, ${fail}개 실패`;
 }
 
-function exportGeoExcel() {
-  if(!geoOriginalWb) return;
+async function exportGeoExcel() {
+  try {
+    if(!geoOriginalBuffer) { alert('원본 파일을 다시 업로드해주세요.'); return; }
+    if(typeof JSZip === 'undefined') { alert('JSZip 로드 실패. 새로고침 후 재시도.'); return; }
 
-  // 원본 워크북 복사 (첫 번째 시트 기준)
-  const wsName = geoOriginalWb.SheetNames[0];
-  const ws = geoOriginalWb.Sheets[wsName];
-  const raw = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+    const coordMap = {};
+    geoBuildings.forEach(b => { if(b.lat && b.lon) coordMap[b.code] = b; });
+    if(!Object.keys(coordMap).length) { alert('저장할 좌표가 없습니다.'); return; }
 
-  // 헤더 행(row[1])에 위도/경도 컬럼 위치 확인 or 추가
-  const hdr = raw[1] || [];
-  let iLat = hdr.findIndex(h=>h&&String(h).includes('위도'));
-  let iLon = hdr.findIndex(h=>h&&String(h).includes('경도'));
-  const maxCol = hdr.length;
-
-  if(iLat < 0) { iLat = maxCol; hdr[iLat] = '위도'; }
-  if(iLon < 0) { iLon = Math.max(maxCol, iLat+1); hdr[iLon] = '경도'; }
-  raw[1] = hdr;
-
-  // 영문 헤더(row[0])에도 추가
-  if(raw[0]) {
-    raw[0][iLat] = raw[0][iLat] || 'Latitude';
-    raw[0][iLon] = raw[0][iLon] || 'Longitude';
-  }
-
-  // 빌딩코드로 매핑해서 위도/경도 업데이트
-  const coordMap = {};
-  geoBuildings.forEach(b => { if(b.lat && b.lon) coordMap[b.code] = {lat:b.lat, lon:b.lon}; });
-
-  for(let r=2; r<raw.length; r++) {
-    const code = String(raw[r][0]||'').trim();
-    if(coordMap[code]) {
-      raw[r][iLat] = coordMap[code].lat;
-      raw[r][iLon] = coordMap[code].lon;
+    // XLSX.js로 컬럼 인덱스 및 코드→행번호 맵 구성
+    const ws    = geoOriginalWb.Sheets[geoOriginalWb.SheetNames[0]];
+    const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+    let iLat = -1, iLon = -1;
+    for(let c = range.s.c; c <= range.e.c; c++) {
+      const cell = ws[XLSX.utils.encode_cell({r:1, c})];
+      if(!cell) continue;
+      const v = String(cell.v||'');
+      if(v.includes('위도')) iLat = c;
+      if(v.includes('경도')) iLon = c;
     }
+    if(iLat < 0) iLat = range.e.c + 1;
+    if(iLon < 0) iLon = iLat + 1;
+    const latCol = XLSX.utils.encode_col(iLat);
+    const lonCol = XLSX.utils.encode_col(iLon);
+    const newMaxCol = iLon + 1; // 1-indexed
+
+    const raw = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+    const codeRowMap = {};
+    for(let r = 2; r < raw.length; r++) {
+      const code = String(raw[r][0]||'').trim();
+      if(code) codeRowMap[code] = r + 1;
+    }
+
+    // 원본 zip 로드
+    const zip = await JSZip.loadAsync(geoOriginalBuffer);
+
+    // 워크시트 XML 경로 탐색
+    const wbXml   = await zip.file('xl/workbook.xml').async('string');
+    const relsXml = await zip.file('xl/_rels/workbook.xml.rels').async('string');
+    const rIdM    = wbXml.match(/<sheet[^>]+r:id="(rId\d+)"/);
+    const rId     = rIdM ? rIdM[1] : 'rId1';
+    const tgtM    = new RegExp('Id="' + rId + '"[^>]+Target="([^"]+)"').exec(relsXml);
+    const wsRel   = tgtM ? tgtM[1] : 'worksheets/sheet1.xml';
+    const wsPath  = /^(\/xl\/|xl\/)/.test(wsRel) ? wsRel.replace(/^\//, '') : 'xl/' + wsRel;
+    if(!zip.file(wsPath)) { alert('워크시트를 찾을 수 없습니다: ' + wsPath); return; }
+
+    let wsXml = await zip.file(wsPath).async('string');
+
+    // ── 1. sharedStrings에 헤더 문자열 추가 ──
+    let latKrIdx = -1, lonKrIdx = -1, latEnIdx = -1, lonEnIdx = -1;
+    const ssFile = zip.file('xl/sharedStrings.xml');
+    if(ssFile) {
+      let ssXml = await ssFile.async('string');
+      // <si> 개수를 정확히 카운트 (모든 형식 포함)
+      const siCount = (ssXml.match(/<si[ >]/g) || []).length;
+      latKrIdx = siCount;
+      lonKrIdx = siCount + 1;
+      latEnIdx = siCount + 2;
+      lonEnIdx = siCount + 3;
+      const newSi = ['위도','경도','Latitude','Longitude']
+        .map(s => '<si><t>' + s + '</t></si>').join('');
+      ssXml = ssXml
+        .replace('</sst>', newSi + '</sst>')
+        .replace(/count="(\d+)"/, (m,n) => 'count="' + (parseInt(n)+4) + '"')
+        .replace(/uniqueCount="(\d+)"/, (m,n) => 'uniqueCount="' + (parseInt(n)+4) + '"');
+      zip.file('xl/sharedStrings.xml', ssXml);
+    }
+
+    // ── 2. <dimension> 확장 ──
+    wsXml = wsXml.replace(/<dimension ref="([^"]+)"/, (m, ref) => {
+      const parts = ref.split(':');
+      const end   = parts[1] || parts[0];
+      const endR  = end.match(/\d+/)[0];
+      return '<dimension ref="' + parts[0] + ':' + lonCol + endR + '"';
+    });
+
+    // ── 3. 행 패치 헬퍼 ──
+    const numC = (col, r, v)   => '<c r="' + col + r + '"><v>' + v + '</v></c>';
+    const ssC  = (col, r, idx) => '<c r="' + col + r + '" t="s"><v>' + idx + '</v></c>';
+
+    const patchRow = (xml, rowNum, cells) => {
+      // spans 확장 포함
+      const reRow = new RegExp('(<row r="' + rowNum + '"[^>]*>)([\\s\\S]*?)(</row>)');
+      if(reRow.test(xml)) {
+        return xml.replace(reRow, (m, open, inner, close) => {
+          const newOpen = open.replace(/spans="(\d+):(\d+)"/, (sm, s, e) =>
+            'spans="' + s + ':' + Math.max(parseInt(e), newMaxCol) + '"');
+          return newOpen + inner + cells + close;
+        });
+      }
+      // 자기닫힘 행 <row r="N" ... />
+      const reSelf = new RegExp('<row r="' + rowNum + '"([^/]*)\/>');
+      if(reSelf.test(xml))
+        return xml.replace(reSelf, '<row r="' + rowNum + '"$1>' + cells + '</row>');
+      // 행 자체 없음 → sheetData 끝에 삽입
+      return xml.replace('</sheetData>', '<row r="' + rowNum + '">' + cells + '</row></sheetData>');
+    };
+
+    // ── 4. 헤더 행 패치 ──
+    if(!wsXml.includes('r="' + latCol + '1"')) {
+      const h1 = latEnIdx >= 0 ? ssC(latCol,1,latEnIdx) + ssC(lonCol,1,lonEnIdx)
+                               : '<c r="' + latCol + '1" t="inlineStr"><is><t>Latitude</t></is></c>'
+                               + '<c r="' + lonCol + '1" t="inlineStr"><is><t>Longitude</t></is></c>';
+      wsXml = patchRow(wsXml, 1, h1);
+    }
+    if(!wsXml.includes('r="' + latCol + '2"')) {
+      const h2 = latKrIdx >= 0 ? ssC(latCol,2,latKrIdx) + ssC(lonCol,2,lonKrIdx)
+                               : '<c r="' + latCol + '2" t="inlineStr"><is><t>위도</t></is></c>'
+                               + '<c r="' + lonCol + '2" t="inlineStr"><is><t>경도</t></is></c>';
+      wsXml = patchRow(wsXml, 2, h2);
+    }
+
+    // ── 5. 데이터 행 패치 ──
+    let patched = 0;
+    for(const [code, b] of Object.entries(coordMap)) {
+      const er = codeRowMap[code];
+      if(!er) continue;
+      if(wsXml.includes('r="' + latCol + er + '"')) continue;
+      wsXml = patchRow(wsXml, er, numC(latCol, er, b.lat) + numC(lonCol, er, b.lon));
+      patched++;
+    }
+    if(!patched) { alert('매칭 행 없음 — 빌딩코드를 확인하세요.'); return; }
+
+    zip.file(wsPath, wsXml);
+
+    const blob = await zip.generateAsync({type:'blob', compression:'DEFLATE', compressionOptions:{level:6}});
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = geoOriginalFile
+      ? geoOriginalFile.replace(/\.xlsx?$/i, '_좌표_' + dateStr() + '.xlsx')
+      : 'DB_좌표_' + dateStr() + '.xlsx';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 3000);
+
+  } catch(err) {
+    alert('엑셀 저장 오류: ' + err.message);
+    console.error(err);
   }
-
-  // 새 워크북으로 저장 (원본 양식 유지)
-  const newWb = XLSX.utils.book_new();
-  const newWs = XLSX.utils.aoa_to_sheet(raw);
-
-  // 원본 컬럼 너비 복사
-  if(ws['!cols']) newWs['!cols'] = [...ws['!cols'], {wch:12}, {wch:12}];
-
-  XLSX.utils.book_append_sheet(newWb, newWs, wsName);
-
-  // 나머지 시트도 복사
-  geoOriginalWb.SheetNames.slice(1).forEach(sn => {
-    XLSX.utils.book_append_sheet(newWb, geoOriginalWb.Sheets[sn], sn);
-  });
-
-  const fname = geoOriginalFile ? geoOriginalFile.replace(/\.xlsx?$/i, `_좌표_${dateStr()}.xlsx`) : `DB_좌표_${dateStr()}.xlsx`;
-  XLSX.writeFile(newWb, fname);
 }
 
 function updateKakaoStatus() {
@@ -1687,6 +1858,56 @@ function updatePerfWarn() {
     warn.style.display = 'none';
   }
 }
+// ═══ 드래그앤드롭 ═══
+function setupDrop(zoneId, handler) {
+  const zone = document.getElementById(zoneId);
+  if (!zone) return;
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag'); });
+  zone.addEventListener('dragleave', e => { if(!zone.contains(e.relatedTarget)) zone.classList.remove('drag'); });
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('drag');
+    const files = e.dataTransfer.files;
+    if (files.length) handler(files);
+  });
+}
+
+// 엑셀 DB 드롭
+setupDrop('exZ', files => {
+  const file = files[0];
+  if (!file || !/\.xlsx?$/i.test(file.name)) { alert('.xlsx / .xls 파일만 지원합니다.'); return; }
+  const reader = new FileReader();
+  reader.onload = e => parseExcel(e.target.result);
+  reader.readAsBinaryString(file);
+  document.getElementById('exLbl').textContent = file.name;
+});
+
+// 대표사진 드롭
+setupDrop('phZ', files => loadImgFiles(files, photos, 'phLbl', 'phZ'));
+
+// 도면 드롭
+setupDrop('flZ', files => loadImgFiles(files, floors, 'flLbl', 'flZ'));
+
+// 드롭용 이미지 로더 (FileList → 기존 loadImgs 로직과 동일)
+function loadImgFiles(files, store, lblId, zoneId) {
+  let loaded = 0;
+  Array.from(files).forEach(file => {
+    if (!file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      const key = file.name.replace(/\.[^.]+$/, '');
+      store[key] = e.target.result;
+      loaded++;
+      if (loaded === files.length) {
+        document.getElementById(lblId).innerHTML =
+          `${Object.keys(store).length}개 로드됨`;
+        document.getElementById(zoneId).classList.add('done');
+        refreshImgStat(); renderList();
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 </script>
 </body>
 </html>
